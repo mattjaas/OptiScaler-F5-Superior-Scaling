@@ -108,6 +108,7 @@ try {
     }
     Build (Join-Path $shaders "superior/RawLow.hlsl") "RawLowMain" @() "host_low_raw"
     Build (Join-Path $shaders "superior/RawResidual.hlsl") "RawResidualMain" @() "host_residual_raw"
+    Build (Join-Path $shaders "superior/SpatialGuides.hlsl") "SuperiorSpatialGuidesMain" @() "host_spatial_guides"
 
     # The host resolve preserves janblade's exposure and composition and substitutes only the residual estimator.
     # raw: the non-temporal resolve; its SDR and HDR builds are identical bytecode, so there is one blob for both.

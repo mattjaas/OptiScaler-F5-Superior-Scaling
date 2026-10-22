@@ -25,7 +25,9 @@ param(
     [switch]$GpuNativeCenter,
     [switch]$GpuNativeCenterTiming,
     [switch]$GpuDiagnostics,
-    [switch]$GpuDiagnosticsTiming
+    [switch]$GpuDiagnosticsTiming,
+    [switch]$GpuMotion,
+    [switch]$GpuMotionTiming
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -33,6 +35,7 @@ $skipped = 3 # prepare_superior_*.py: the port's history is not in this clone
 Push-Location $repo
 try {
     if ($GpuDiagnosticsTiming) { $GpuDiagnostics = $true }
+    if ($GpuMotionTiming) { $GpuMotion = $true }
     if (($GpuQuality -or $GpuTiming) -and
         (!$ReferenceShaderDirectory -or !(Test-Path -LiteralPath $ReferenceShaderDirectory -PathType Container))) {
         throw '-GpuQuality and -GpuTiming compare against the original v59 shaders: pass -ReferenceShaderDirectory ' +
@@ -103,6 +106,8 @@ try {
     if ($GpuNativeCenterTiming) { $names += 'native_center_timing' }
     if ($GpuDiagnostics) { $names += 'stage_bypass_quality' }
     if ($GpuDiagnosticsTiming) { $names += 'stage_bypass_timing' }
+    if ($GpuMotion) { $names += 'continuous_motion_quality' }
+    if ($GpuMotionTiming) { $names += 'continuous_motion_timing' }
     if ($GpuCandidates -or $GpuCandidateTiming) {
         $names += @('four_candidates_quality', 'fused_pack_experiment')
         if ($GpuCandidateTiming) { $names += 'four_candidates_timing' }
@@ -163,6 +168,14 @@ try {
     if ($GpuDiagnosticsTiming) {
         & "$out/stage_bypass_timing.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Stage bypass GPU timing failed' }
+    }
+    if ($GpuMotion) {
+        & "$out/continuous_motion_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Continuous Compress motion GPU test failed' }
+    }
+    if ($GpuMotionTiming) {
+        & "$out/continuous_motion_timing.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Continuous Compress motion GPU timing failed' }
     }
     if ($GpuSpatialTiming) {
         & "$out/spatial_timing.exe"

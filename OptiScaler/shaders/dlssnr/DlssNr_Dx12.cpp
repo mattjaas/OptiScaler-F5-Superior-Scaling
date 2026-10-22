@@ -70,6 +70,7 @@
 #include "precompile/dlssnr_edit_cache_Shader.h"
 #include "precompile/dlssnr_spatial_Shader.h"
 #include "precompile/dlssnr_spatial_guides_Shader.h"
+#include "superior/precompile/host_spatial_guides_Shader.h"
 #include "precompile/dlssnr_exposure_adapt_Shader.h"
 #include "precompile/dlssnr_lut_Shader.h"
 #include "../output_scaling/OS_Dx12.h"
@@ -2305,6 +2306,8 @@ DlssNr_Dx12::~DlssNr_Dx12()
         _spatialPipelineState->Release();
     if (_spatialGuidesPipelineState)
         _spatialGuidesPipelineState->Release();
+    if (_superiorSpatialGuides)
+        _superiorSpatialGuides->Release();
     for (auto& buffer : _constantBuffers)
     {
         if (buffer != nullptr)
@@ -2825,14 +2828,27 @@ bool DlssNr_Dx12::SpatialReady()
 }
 
 bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const DlssNr::Spatial::Constants& InConstants,
-                                  ID3D12Resource* In0, ID3D12Resource* In1, ID3D12Resource* In2,
-                                  ID3D12Resource* Out0, ID3D12Resource* Out1)
+                                  ID3D12Resource* In0, ID3D12Resource* In1, ID3D12Resource* In2, ID3D12Resource* Out0,
+                                  ID3D12Resource* Out1, bool continuousMotion)
 {
     if (!SpatialReady() || InCmdList == nullptr || _device == nullptr || Out0 == nullptr || InConstants.width == 0 ||
         InConstants.height == 0)
         return false;
 
     const bool guides = InConstants.mode == 101;
+    auto* pipeline = guides ? _spatialGuidesPipelineState : _spatialPipelineState;
+    if (guides && continuousMotion)
+    {
+        if (!_superiorSpatialGuidesAttempted)
+        {
+            _superiorSpatialGuidesAttempted = true;
+            CreateComputePipeline(_device, &_superiorSpatialGuides, host_spatial_guides_cso,
+                                  sizeof(host_spatial_guides_cso), nullptr);
+        }
+        pipeline = _superiorSpatialGuides;
+        if (!pipeline)
+            return false;
+    }
     ID3D12Resource* const first = In0 != nullptr ? In0 : In1;
 
     if (first == nullptr)
@@ -2870,7 +2886,7 @@ bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const Dl
     ID3D12DescriptorHeap* heaps[] = { currentHeap.GetHeapCSU() };
     InCmdList->SetDescriptorHeaps(_countof(heaps), heaps);
     InCmdList->SetComputeRootSignature(_rootSignature);
-    InCmdList->SetPipelineState(guides ? _spatialGuidesPipelineState : _spatialPipelineState);
+    InCmdList->SetPipelineState(pipeline);
     InCmdList->SetComputeRootDescriptorTable(0, currentHeap.GetTableGPUStart());
     InCmdList->Dispatch((InConstants.width + _numThreadsX - 1) / _numThreadsX,
                         (InConstants.height + _numThreadsY - 1) / _numThreadsY, 1);
@@ -4588,9 +4604,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         const bool packedColor =
             DispatchSpatial(cmdList, MakeConstants(spatialLayout, 100, guides, 1.0f, 1.0f), g_nr.colorCopy, nullptr,
                             nullptr, EdgeCompression::color);
-        const bool packedGuides = packedColor && DispatchSpatial(cmdList, guideConstants, g_nr.colorCopy, depthIn,
-                                                                 motionIn, EdgeCompression::depth,
-                                                                 EdgeCompression::motion);
+        const bool packedGuides =
+            packedColor &&
+            DispatchSpatial(cmdList, guideConstants, g_nr.colorCopy, depthIn, motionIn, EdgeCompression::depth,
+                            EdgeCompression::motion,
+                            superior && DlssNr::SuperiorScaling::Diagnostics::ContinuousMotion(superiorDiagnostics));
 
         if (!packedGuides)
         {

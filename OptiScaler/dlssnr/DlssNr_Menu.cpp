@@ -3478,7 +3478,7 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
             if (ImGui::TreeNode("Superior stage bypasses (diagnostic)"))
             {
                 ImGui::TextWrapped("Change one stage at a time. Each change resets NR and residual history. "
-                                   "All boxes clear restores the previous experimental behavior.");
+                                   "All boxes clear restores the default experimental path.");
                 const auto option = [&](const char* label, auto& setting, const char* help)
                 {
                     bool value = setting.value_or_default();
@@ -3510,6 +3510,10 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                 option("Use full-frame guided at 100%", config->DlssNrSuperiorFullGuided,
                        "Disable this branch's uncompressed-center bypass. At 100% with Compress, guided runs "
                        "across the whole frame again. No effect while guided reconstruction is skipped.");
+                option("Point-sampled motion (legacy)", config->DlssNrSuperiorPointMotion,
+                       "Restore the previous nearest-texel motion sampling before Compress. Leave off to interpolate "
+                       "smooth motion fields while retaining point sampling across motion discontinuities. "
+                       "Keep Skip MV unit conversion off for this comparison. Only affects Superior with Compress.");
                 if (ImGui::Button("Reset stage bypasses"))
                 {
                     config->DlssNrSuperiorSkipMvUnits = false;
@@ -3520,6 +3524,7 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                     config->DlssNrSuperiorSkipCompressionLow = false;
                     config->DlssNrSuperiorSkipWarpCache = false;
                     config->DlssNrSuperiorFullGuided = false;
+                    config->DlssNrSuperiorPointMotion = false;
                 }
                 ImGui::TreePop();
             }

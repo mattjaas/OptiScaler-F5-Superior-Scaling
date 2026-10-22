@@ -5,10 +5,10 @@ Model resolution 100% and Compress screen edges. These are diagnostic variants, 
 production quality/performance defaults. A headless shader comparison cannot establish which
 motion convention the proprietary NR runtime expects in a particular game.
 
-In the Superior menu, expand **Superior stage bypasses (diagnostic)**. All eight switches
+In the Superior menu, expand **Superior stage bypasses (diagnostic)**. All nine switches
 default to false. They affect Superior only; other enlargement algorithms retain their behavior.
 Changing a switch resets NR history and retires the previous residual generation safely.
-**Reset stage bypasses** clears these eight switches but preserves the separate residual-DLSS
+**Reset stage bypasses** clears these nine switches but preserves the separate residual-DLSS
 choice. Configuration keys are under `[DlssNr]`.
 
 | Checkbox | INI key | Effect |
@@ -21,8 +21,10 @@ choice. Configuration keys are under `[DlssNr]`.
 | Skip Compress correction for low | SuperiorSkipCompressionLow | Use the pre-compression Model resolution scale for low as well as high/medium. This affects the correction schedule and final gains. |
 | Skip cached warp lookup | SuperiorSkipWarpCache | Compute Compress mapping directly instead of using its cached axis lookup. |
 | Use full-frame guided at 100% | SuperiorFullGuided | Restore guided reconstruction throughout the frame at 100% with Compress, bypassing this branch's native-center experiment. Has no effect while guided reconstruction is skipped. |
+| Point-sampled motion (legacy) | SuperiorPointMotion | Restore the preceding point-sampled motion pack instead of the continuous-field experiment. Keep Skip MV unit conversion off for this comparison. |
 
-Start with residual DLSS off and all eight switches clear. Reproduce the same moving-camera
+See the [motion sampling experiment](Superior-Compress-motion-sampling.md) for the current default.
+Start with residual DLSS off and all nine switches clear. Reproduce the same moving-camera
 scene and test **Skip MV unit conversion** alone first. Clear it, then test **Skip carrier
 encode/decode**, final shaping, the low compression correction, guided reconstruction and
 full-frame guided individually. Leave a few frames after every change for history to settle.
@@ -51,7 +53,7 @@ scaling applies to the new value, including automatic correction scheduling.
 ./tools/test_superior_port.ps1 -GpuDiagnosticsTiming
 ```
 
-CPU tests exercise all 256 diagnostic masks, their dependencies, effective model selection
+CPU tests exercise all 512 diagnostic masks, their dependencies, effective model selection
 and gain/schedule behavior. GPU comparisons check the new bilinear and full-guided choices
 against independent references, with packed/unpacked and HDR/SDR inputs, odd dimensions,
 FP16/FP32 outputs, and raw residual extraction including nonfinite values. Existing shaders

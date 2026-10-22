@@ -503,6 +503,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrSuperiorSkipCompressionLow.set_from_config(readBool("DlssNr", "SuperiorSkipCompressionLow"));
             DlssNrSuperiorSkipWarpCache.set_from_config(readBool("DlssNr", "SuperiorSkipWarpCache"));
             DlssNrSuperiorFullGuided.set_from_config(readBool("DlssNr", "SuperiorFullGuided"));
+            DlssNrSuperiorPointMotion.set_from_config(readBool("DlssNr", "SuperiorPointMotion"));
 
             DlssNrWhitePointFromExposure.set_from_config(readBool("DlssNr", "WhitePointFromExposure"));
             DlssNrProbeD3D11.set_from_config(readBool("DlssNr", "ProbeD3D11"));
@@ -1669,6 +1670,8 @@ bool Config::SaveIni()
                  GetBoolValue(Instance()->DlssNrSuperiorSkipWarpCache.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorFullGuided",
                  GetBoolValue(Instance()->DlssNrSuperiorFullGuided.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorPointMotion",
+                 GetBoolValue(Instance()->DlssNrSuperiorPointMotion.value_for_config()).c_str());
 
     ini.SetValue("DlssNr", "ProbeD3D11",
                  GetBoolValue(Instance()->DlssNrProbeD3D11.value_for_config()).c_str());

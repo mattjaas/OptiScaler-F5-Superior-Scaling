@@ -133,6 +133,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // pipelines of one shader, built on first use the same way. Not retried once they failed to build.
     ID3D12PipelineState* _spatialPipelineState = nullptr;
     ID3D12PipelineState* _spatialGuidesPipelineState = nullptr;
+    ID3D12PipelineState* _superiorSpatialGuides = nullptr;
+    bool _superiorSpatialGuidesAttempted = false;
     bool _spatialPipelineFailed = false;
 
     // The LUT pass (dlssnr_lut.hlsl, LUT-apply epic Story 2: dlssnr-lut-apply).
@@ -263,7 +265,7 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     bool SpatialReady();
     bool DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const DlssNr::Spatial::Constants& InConstants,
                          ID3D12Resource* In0, ID3D12Resource* In1, ID3D12Resource* In2, ID3D12Resource* Out0,
-                         ID3D12Resource* Out1 = nullptr);
+                         ID3D12Resource* Out1 = nullptr, bool continuousMotion = false);
 
     // The LUT pass (dlssnr_lut.hlsl, DlssNr_Lut.h, LUT-apply epic Story 2:
     // dlssnr-lut-apply). Grades InSource (Width x Height, already in the colour

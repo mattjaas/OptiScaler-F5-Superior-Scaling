@@ -444,6 +444,7 @@ class Config
     CustomOptional<bool> DlssNrSuperiorSkipCompressionLow { false };
     CustomOptional<bool> DlssNrSuperiorSkipWarpCache { false };
     CustomOptional<bool> DlssNrSuperiorFullGuided { false };
+    CustomOptional<bool> DlssNrSuperiorPointMotion { false };
 
     // Measure the white point from the frame instead of taking it from the slider. On a frame the
     // game already tone mapped there is nothing to measure and this has no effect.

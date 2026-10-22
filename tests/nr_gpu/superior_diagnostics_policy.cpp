@@ -10,7 +10,7 @@ struct Settings
 {
     Setting DlssNrSuperiorSkipMvUnits, DlssNrSuperiorSkipInterPass, DlssNrSuperiorSkipCarrier, DlssNrSuperiorSkipGuided,
         DlssNrSuperiorSkipFinalShaping, DlssNrSuperiorSkipCompressionLow, DlssNrSuperiorSkipWarpCache,
-        DlssNrSuperiorFullGuided;
+        DlssNrSuperiorFullGuided, DlssNrSuperiorPointMotion;
 };
 void require(bool v)
 {
@@ -22,14 +22,15 @@ int main()
     try
     {
         namespace D = DlssNr::SuperiorScaling::Diagnostics;
-        for (unsigned bits = 0; bits < 256; ++bits)
+        for (unsigned bits = 0; bits < 512; ++bits)
         {
             Settings s;
             Setting* fields[] { &s.DlssNrSuperiorSkipMvUnits,      &s.DlssNrSuperiorSkipInterPass,
                                 &s.DlssNrSuperiorSkipCarrier,      &s.DlssNrSuperiorSkipGuided,
                                 &s.DlssNrSuperiorSkipFinalShaping, &s.DlssNrSuperiorSkipCompressionLow,
-                                &s.DlssNrSuperiorSkipWarpCache,    &s.DlssNrSuperiorFullGuided };
-            for (unsigned i = 0; i < 8; ++i)
+                                &s.DlssNrSuperiorSkipWarpCache,    &s.DlssNrSuperiorFullGuided,
+                                &s.DlssNrSuperiorPointMotion };
+            for (unsigned i = 0; i < 9; ++i)
                 fields[i]->value = (bits & (1u << i)) != 0;
             const auto mask = D::Mask(s);
             require(mask == bits);
@@ -41,8 +42,9 @@ int main()
             require(gains.high == ((bits & 16u) ? 1.f : .8f) && gains.low == ((bits & 16u) ? 1.f : .66f));
             require(D::CachedWarp(mask) == !(bits & (64u | 8u)));
             require(D::NativeCenter(mask) == !(bits & (128u | 8u)));
+            require(D::ContinuousMotion(mask) == !(bits & 256u));
         }
-        std::cout << "Superior stage bypass policy PASS: all 256 combinations; carrier/DLSS dependency, independent "
+        std::cout << "Superior stage bypass policy PASS: all 512 combinations; carrier/DLSS dependency, independent "
                      "gains and warp modes\n";
     }
     catch (const std::exception& e)

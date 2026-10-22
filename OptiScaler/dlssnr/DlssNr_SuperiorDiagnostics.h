@@ -4,7 +4,7 @@
 namespace DlssNr::SuperiorScaling::Diagnostics
 {
 constexpr uint32_t MvUnits = 1u, InterPass = 2u, Carrier = 4u, Guided = 8u, FinalShaping = 16u, CompressionLow = 32u,
-                   WarpCache = 64u, FullGuided = 128u;
+                   WarpCache = 64u, FullGuided = 128u, PointMotion = 256u;
 template <class C> inline uint32_t Mask(const C& c)
 {
     return (c.DlssNrSuperiorSkipMvUnits.value_or_default() ? MvUnits : 0u) |
@@ -14,7 +14,8 @@ template <class C> inline uint32_t Mask(const C& c)
            (c.DlssNrSuperiorSkipFinalShaping.value_or_default() ? FinalShaping : 0u) |
            (c.DlssNrSuperiorSkipCompressionLow.value_or_default() ? CompressionLow : 0u) |
            (c.DlssNrSuperiorSkipWarpCache.value_or_default() ? WarpCache : 0u) |
-           (c.DlssNrSuperiorFullGuided.value_or_default() ? FullGuided : 0u);
+           (c.DlssNrSuperiorFullGuided.value_or_default() ? FullGuided : 0u) |
+           (c.DlssNrSuperiorPointMotion.value_or_default() ? PointMotion : 0u);
 }
 inline bool PrivateDlss(bool requested, uint32_t mask) { return requested && !(mask & Carrier); }
 inline FrequencyScales Scales(FrequencyScales scales, uint32_t mask)
@@ -29,4 +30,5 @@ inline InterPass::ScheduleGains FinalGains(InterPass::ScheduleGains gains, uint3
 }
 inline bool CachedWarp(uint32_t mask) { return !(mask & (WarpCache | Guided)); }
 inline bool NativeCenter(uint32_t mask) { return !(mask & (FullGuided | Guided)); }
+inline bool ContinuousMotion(uint32_t mask) { return !(mask & PointMotion); }
 } // namespace DlssNr::SuperiorScaling::Diagnostics
