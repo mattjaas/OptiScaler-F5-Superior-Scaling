@@ -79,3 +79,48 @@ In-game A/B: use the original `cb02f81f` DLL as full-guided reference, then this
 checkbox on and off. Compare 100% with Light/Balanced/Strong during camera movement and
 disocclusion, plus 65% controls, HDR/SDR and NR Main/Small/mixed passes. Check the transition,
 thin geometry and fine textures. Use GPU timestamps with warmup and ABBA for whole-path timings.
+
+## Results for code commit 30774526
+
+Release x64 [build passed](https://github.com/mattjaas/OptiScaler-F5-Superior-Scaling/actions/runs/39861211814).
+All 47 Superior shaders/headers rebuild byte for byte; CPU gain/guide/scheduling tests passed.
+Local GPU validation on RTX 4090 / driver 616.56 passed:
+
+| Test | Result |
+| --- | --- |
+| Ordinary host composition | 2,304 cases / 5,974,272 words, bit-exact |
+| Packed host independent estimator | 4,824 cases / 1,046,248,416 components; native FP32 max error 1.52e-6, FP16 at most 2 ULPs |
+| Native center mask | 2,602,608 pixels; all 208,251 compressed footprints fully guided |
+| Cached original UV channel | 58,176 coordinates, bit-exact |
+| No-DLSS carrier encode/decode | 24 cases / 601,224 words, bit-exact |
+| Packed carrier/MV preparation | 48 cases / 4,202,496 words, bit-exact |
+| Raw cached-low field | 216 cases / 59,616 words, bit-exact |
+
+The native estimator intentionally differs from the full-guided baseline. The above small error
+bounds describe agreement with its independent new specification, not equality to the old image.
+Unchanged reduced-resolution paths require exact equality in these comparisons.
+
+GPU timestamps compare the original full-guided cached normal PSOs from **cb02f81f** with this
+branch's native cached PSOs, on resident synthetic 3840x2160 textured/edge images. Inputs are
+FP16 proxy/residual/Low64/output and FP32 original guide/warp metadata. Both sides receive the
+same carrier encode/decode result (no proprietary DLSS inference in this harness), NR Small
+Standard gains, Structure=Intensity=1. Profiles: Light/Balanced/Strong, 65%/100%, SDR and HDR
+mappings 0/2/4/6. Eight alternating ABBA/BAAB blocks each have eight warmup quartets and forty
+measured quartets, with four GPU repetitions per timestamp: **640 samples per variant/profile**.
+No samples are removed. The measured region includes only final resolve and its output UAV barrier.
+
+All 15 native configurations improve all eight block median deltas. Paired median savings range
+from **0.022144 to 0.061312 ms**. The 15 P65 controls have paired median deltas within 0.000064 ms
+of zero and pass bit-exact output comparison before timing. Example native HDR mapping 0:
+
+| Compress | Baseline median ms | Candidate median ms | Paired median delta ms | Baseline / candidate stddev ms |
+| --- | ---: | ---: | ---: | ---: |
+| Light | 0.278784 | 0.243712 | -0.031488 | 0.110300 / 0.099220 |
+| Balanced | 0.286464 | 0.246016 | -0.035520 | 0.048488 / 0.038041 |
+| Strong | 0.270720 | 0.244224 | -0.024128 | 0.052003 / 0.043523 |
+
+[Raw timestamp samples](validation/superior-native-residual-experiment.csv) and
+[all medians, variability and paired block deltas](validation/superior-native-residual-experiment.json).
+Recreate the JSON with `python tools/summarize_superior_candidates.py <csv>`.
+No full-game speedup or measured private-DLSS-on/off inference saving is claimed. The game still
+needs motion/transition validation with the checkbox on and off.
