@@ -103,6 +103,9 @@ float3 SuperiorGuidedEdit(float2 uvq, float3 nativeGuide)
 #endif
 #endif
     const float3 fallback = SanitizeFinite3(gModel.SampleLevel(gLinear, saturate(uvq), 0).rgb, 0.0);
+#if defined(DLSSNR_SUPERIOR_SKIP_GUIDED)
+    return SuperiorShapeEdit(fallback, uvq);
+#endif
     const float rangeSigma = max(abs(0.015), 1e-5);
     const float spatialSigma = max(abs(3.0), 1e-4);
     const float invRange2 = 1.0 / (rangeSigma * rangeSigma);

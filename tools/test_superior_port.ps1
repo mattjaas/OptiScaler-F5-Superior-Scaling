@@ -23,13 +23,16 @@ param(
     [switch]$GpuCandidates,
     [switch]$GpuCandidateTiming,
     [switch]$GpuNativeCenter,
-    [switch]$GpuNativeCenterTiming
+    [switch]$GpuNativeCenterTiming,
+    [switch]$GpuDiagnostics,
+    [switch]$GpuDiagnosticsTiming
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $skipped = 3 # prepare_superior_*.py: the port's history is not in this clone
 Push-Location $repo
 try {
+    if ($GpuDiagnosticsTiming) { $GpuDiagnostics = $true }
     if (($GpuQuality -or $GpuTiming) -and
         (!$ReferenceShaderDirectory -or !(Test-Path -LiteralPath $ReferenceShaderDirectory -PathType Container))) {
         throw '-GpuQuality and -GpuTiming compare against the original v59 shaders: pass -ReferenceShaderDirectory ' +
@@ -62,7 +65,8 @@ try {
         return $true
     }
 
-    $cpu = @('superior_policy', 'spatial_policy', 'interpass_policy', 'nr_guides_smoke', 'nr_surface_formats_smoke')
+    $cpu = @('superior_policy', 'spatial_policy', 'interpass_policy', 'nr_guides_smoke', 'nr_surface_formats_smoke',
+             'superior_diagnostics_policy')
     $quality = @('superior_carrier', 'superior_prepare_quality', 'superior_input_quality',
                  'superior_exposure_quality', 'superior_softknee_quality', 'superior_tall_low_quality',
                  'interpass_low_cache_quality')
@@ -75,9 +79,12 @@ try {
         $GpuHostOptTiming = $false
     }
     if ($GpuHost -and !(Prepare 'Host reference shaders' @('tools/prepare_superior_host_tests.py'))) { $GpuHost = $false }
-    if ($GpuNativeCenter -or $GpuNativeCenterTiming) {
+    if ($GpuDiagnostics -and !$GpuHost) {
+        if (!(Prepare 'Diagnostic host references' @('tools/prepare_superior_host_tests.py'))) { $GpuDiagnostics = $false }
+    }
+    if ($GpuNativeCenter -or $GpuNativeCenterTiming -or $GpuDiagnostics) {
         if (!(Prepare 'Native center reference' @('tools/prepare_native_center_tests.py'))) {
-            $GpuNativeCenter = $false; $GpuNativeCenterTiming = $false
+            $GpuNativeCenter = $false; $GpuNativeCenterTiming = $false; $GpuDiagnostics = $false
         }
     }
     if (($GpuCandidates -or $GpuCandidateTiming) -and !(Prepare 'Candidate shaders' @('tools/prepare_superior_candidates.py'))) {
@@ -94,6 +101,8 @@ try {
     if ($GpuHost) { $names += @('superior_host_quality', 'packed_host_quality') }
     if ($GpuNativeCenter -or $GpuNativeCenterTiming) { $names += @('native_center_mask', 'carrier_bypass_quality') }
     if ($GpuNativeCenterTiming) { $names += 'native_center_timing' }
+    if ($GpuDiagnostics) { $names += 'stage_bypass_quality' }
+    if ($GpuDiagnosticsTiming) { $names += 'stage_bypass_timing' }
     if ($GpuCandidates -or $GpuCandidateTiming) {
         $names += @('four_candidates_quality', 'fused_pack_experiment')
         if ($GpuCandidateTiming) { $names += 'four_candidates_timing' }
@@ -146,6 +155,14 @@ try {
     if ($GpuNativeCenterTiming) {
         & "$out/native_center_timing.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Native center timing failed' }
+    }
+    if ($GpuDiagnostics) {
+        & "$out/stage_bypass_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Stage bypass GPU test failed' }
+    }
+    if ($GpuDiagnosticsTiming) {
+        & "$out/stage_bypass_timing.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Stage bypass GPU timing failed' }
     }
     if ($GpuSpatialTiming) {
         & "$out/spatial_timing.exe"

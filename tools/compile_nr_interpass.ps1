@@ -107,6 +107,7 @@ try {
         }
     }
     Build (Join-Path $shaders "superior/RawLow.hlsl") "RawLowMain" @() "host_low_raw"
+    Build (Join-Path $shaders "superior/RawResidual.hlsl") "RawResidualMain" @() "host_residual_raw"
 
     # The host resolve preserves janblade's exposure and composition and substitutes only the residual estimator.
     # raw: the non-temporal resolve; its SDR and HDR builds are identical bytecode, so there is one blob for both.
@@ -117,14 +118,17 @@ try {
     $hostVariants += @('cached_packed_sdr', 'cached_packed_hdr0', 'cached_packed_hdr2', 'cached_packed_hdr4', 'cached_packed_hdr6')
     $hostVariants += @('native_packed_hdr', 'native_packed_sdr', 'native_cached_packed_sdr',
                        'native_cached_packed_hdr0', 'native_cached_packed_hdr2', 'native_cached_packed_hdr4', 'native_cached_packed_hdr6')
+    $hostVariants += @('skip_guided_hdr', 'skip_guided_sdr', 'skip_guided_packed_hdr', 'skip_guided_packed_sdr')
     foreach ($variant in $hostVariants) {
         $native = $variant.StartsWith('native_')
         $cached = $variant.Contains('cached_')
         $specialized = $variant.StartsWith('normal_') -or $cached
         $stem = if ($specialized) { "host_$variant" } else { "host_resolve_$variant" }
         if ($native) { $stem = "host_$variant" }
+        if ($variant.StartsWith('skip_guided_')) { $stem = "host_$variant" }
         $defines = @("-D", "DLSSNR_SUPERIOR_HOST_RESOLVE=1")
         if ($native) { $defines += @('-D', 'DLSSNR_SUPERIOR_NATIVE_CENTER=1') }
+        if ($variant.StartsWith('skip_guided_')) { $defines += @('-D', 'DLSSNR_SUPERIOR_SKIP_GUIDED=1') }
         if ($variant.EndsWith("sdr")) { $defines += @("-D", "DLSSNR_SUPERIOR_HOST_SDR=1") }
         if ($variant -eq "raw") { $defines += @("-D", "DLSSNR_SUPERIOR_HOST_RAW=1") }
         if ($variant.Contains("packed_")) { $defines += @("-D", "DLSSNR_SUPERIOR_HOST_PACKED=1") }

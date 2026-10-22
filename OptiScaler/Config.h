@@ -436,6 +436,14 @@ class Config
     CustomOptional<uint32_t> DlssNrTransfer { 1 }; // 11: Superior Scaling
     CustomOptional<uint32_t> DlssNrSuperiorScalingPreset { 1 }; // private SR A=1 / K=11
     CustomOptional<bool> DlssNrSuperiorResidualDlss { true };   // experimental: skip private SR, keep NR/guided shaping
+    CustomOptional<bool> DlssNrSuperiorSkipMvUnits { false };
+    CustomOptional<bool> DlssNrSuperiorSkipInterPass { false };
+    CustomOptional<bool> DlssNrSuperiorSkipCarrier { false };
+    CustomOptional<bool> DlssNrSuperiorSkipGuided { false };
+    CustomOptional<bool> DlssNrSuperiorSkipFinalShaping { false };
+    CustomOptional<bool> DlssNrSuperiorSkipCompressionLow { false };
+    CustomOptional<bool> DlssNrSuperiorSkipWarpCache { false };
+    CustomOptional<bool> DlssNrSuperiorFullGuided { false };
 
     // Measure the white point from the frame instead of taking it from the slider. On a frame the
     // game already tone mapped there is nothing to measure and this has no effect.

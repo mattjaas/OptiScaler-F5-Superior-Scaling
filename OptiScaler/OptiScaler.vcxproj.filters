@@ -1995,6 +1995,7 @@
     <ClInclude Include="dlssnr\DlssNr_InterPassPolicy.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="dlssnr\DlssNr_InterPassSchedule.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="dlssnr\DlssNr_SuperiorGains.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="dlssnr\DlssNr_SuperiorDiagnostics.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="dlssnr\DlssNr_SuperiorScaling.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="shaders\dlssnr\superior\Constants.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="shaders\dlssnr\superior\Fields.h"><Filter>Header Files</Filter></ClInclude>

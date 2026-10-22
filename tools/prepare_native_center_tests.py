@@ -35,3 +35,6 @@ subprocess.run([str(dxc),'-T','cs_6_0','-E','NativeMaskProbe','-O3','-Qstrip_deb
 subprocess.run([str(dxc),'-T','cs_6_0','-E','CSMain','-O3','-Qstrip_debug','-Qstrip_reflect',
                 str(root/'tests/nr_gpu/carrier_bypass_reference.hlsl'),
                 '-Fo',str(out/'carrier_bypass_reference_Shader.cso')],check=True)
+subprocess.run([str(dxc),'-T','cs_6_0','-E','CSMain','-O3','-Qstrip_debug','-Qstrip_reflect',
+                str(root/'tests/nr_gpu/raw_residual_reference.hlsl'),
+                '-Fo',str(out/'raw_residual_reference_Shader.cso')],check=True)

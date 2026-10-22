@@ -69,7 +69,7 @@ inline float High(unsigned style, unsigned nrPreset = 1u, bool mainOnly = false)
 {
     if (!Calibrated(style, nrPreset))
         return UncalibratedHigh;
-    constexpr float main[] { .8f, .75f, .95f }, smallModel[] { .950f, .925f, .955f };
+    constexpr float main[] { .8f, .75f, .95f }, smallModel[] { .950f, .900f, .955f };
     return (EffectiveNrPreset(nrPreset, mainOnly) == 2u ? smallModel : main)[style];
 }
 inline float Low(unsigned style, unsigned nrPreset = 1u, bool mainOnly = false)

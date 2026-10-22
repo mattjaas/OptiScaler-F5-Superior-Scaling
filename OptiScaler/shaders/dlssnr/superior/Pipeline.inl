@@ -39,6 +39,7 @@ struct Generation
     bool inverted = false, beforeSr = false, reset = true;
     // temporal retains the signed-residual guided reconstruction path; stabilize selects private NGX inference.
     bool temporal = false, stabilize = true, packed = false;
+    uint32_t diagnostics = 0;
     DlssNr::Spatial::Layout layout {};
     Texture warp, warpCache;
     ComPtr<ID3D12Resource> warpUpload;
@@ -120,6 +121,7 @@ struct State
     DlssNr::GpuLifetime lifetime { &Destroyed };
     std::shared_ptr<Generation> current;
     bool wasSelected = false, wasActive = false, wasResidualDlss = true;
+    uint32_t wasDiagnostics = 0;
     std::string status;
     std::string unavailable;   // why Superior is not running this session; empty while it runs
     bool srUnavailable = false; // the NGX DLSS SR runtime itself failed: the menu greys Superior out
@@ -292,7 +294,8 @@ bool CreateWarp(Generation& g, DlssNr_Dx12& shader, ID3D12GraphicsCommandList* c
     cmd->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
     g.warp.To(cmd, Srv);
     // Optional acceleration. Failure leaves the immutable metadata and arithmetic PSOs usable.
-    if (Ensure(g.warpCache, g.device.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT, std::max(11u, std::max(g.width, g.height)),
+    if (DlssNr::SuperiorScaling::Diagnostics::CachedWarp(g.diagnostics) &&
+        Ensure(g.warpCache, g.device.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT, std::max(11u, std::max(g.width, g.height)),
                3) &&
         shader.BuildSuperiorWarpCache(cmd, g.width, g.height, g.warp.Get(), g.warpCache.Get()))
         g.warpCache.To(cmd, Srv);
@@ -430,6 +433,20 @@ ID3D12Resource* Stabilize(Generation& g, DlssNr_Dx12& shader, ID3D12GraphicsComm
                           const DlssNrFrameInfo& frame, bool reset, bool hold, ID3D12Resource* packedDepth,
                           ID3D12Resource* packedMotion)
 {
+    if (g.diagnostics & DlssNr::SuperiorScaling::Diagnostics::Carrier)
+    {
+        if (!Ensure(g.carrier, g.device.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, g.workWidth, g.workHeight))
+            return nullptr;
+        Constants c {};
+        c.Mode = 40u;
+        c.Width = g.workWidth;
+        c.Height = g.workHeight;
+        c.DirectResolveFlags = DlssNr::SuperiorScaling::ShaderFlag;
+        if (!Dispatch(shader, cmd, c, proxy, answer, nullptr, nullptr, nullptr, nullptr, g.carrier))
+            return nullptr;
+        g.reset = false;
+        return g.carrier.Get();
+    }
     if (!g.stabilize)
     {
         if (!Ensure(g.carrier, g.device.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, g.workWidth, g.workHeight) ||
@@ -518,7 +535,9 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
     auto& state = GetState();
     g_used = true;
     state.lifetime.Collect();
-    const bool stabilize = Config::Instance()->DlssNrSuperiorResidualDlss.value_or_default();
+    const auto diagnostics = DlssNr::SuperiorScaling::Diagnostics::Mask(*Config::Instance());
+    const bool stabilize = DlssNr::SuperiorScaling::Diagnostics::PrivateDlss(
+        Config::Instance()->DlssNrSuperiorResidualDlss.value_or_default(), diagnostics);
     if (temporal && stabilize && !haveDepth)
     {
         GiveUp("temporal stabilization needs the game's depth and motion guides", false);
@@ -546,8 +565,8 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
             previous->workWidth != workWidth || previous->workHeight != workHeight || previous->format != format ||
             previous->inverted != frame.DepthInverted || previous->beforeSr != frame.BeforeUpscale ||
             previous->temporal != temporal || previous->stabilize != stabilize ||
-            previous->packed != (layout != nullptr) || (layout && previous->layout != *layout) ||
-            previous->preset != preset)
+            previous->diagnostics != diagnostics || previous->packed != (layout != nullptr) ||
+            (layout && previous->layout != *layout) || previous->preset != preset)
         {
             Drop();
             g_nr.reset = true;
@@ -567,6 +586,7 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
         g.beforeSr = frame.BeforeUpscale;
         g.temporal = temporal;
         g.stabilize = stabilize;
+        g.diagnostics = diagnostics;
         g.packed = layout != nullptr;
         if (layout)
             g.layout = *layout;

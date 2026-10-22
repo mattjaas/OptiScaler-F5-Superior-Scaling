@@ -5,6 +5,7 @@
 #include "DlssNr_ExposureScan.h"
 #include "DlssNr_LookPresets.h"
 #include "DlssNr_SuperiorScaling.h"
+#include "DlssNr_SuperiorDiagnostics.h"
 #include "DlssNrNative.h"
 
 
@@ -3411,8 +3412,9 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
         const bool superior = DlssNr::SuperiorScaling::Enabled(*config);
 
         // Superior needs D3D12 (or a D3D12 bridge) and NVIDIA's DLSS SR through NGX for its temporal part.
-        const bool superiorBlocked = nr.vulkan || (config->DlssNrSuperiorResidualDlss.value_or_default() &&
-                                                   DlssNr::SuperiorScaling::SrUnavailable());
+        const bool wantsResidualDlss = DlssNr::SuperiorScaling::Diagnostics::PrivateDlss(
+            config->DlssNrSuperiorResidualDlss.value_or_default(), DlssNr::SuperiorScaling::Diagnostics::Mask(*config));
+        const bool superiorBlocked = nr.vulkan || (wantsResidualDlss && DlssNr::SuperiorScaling::SrUnavailable());
 
         if (!reduced && !superior)
             ImGui::BeginDisabled();
@@ -3451,9 +3453,12 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
 
         if (superior)
         {
-            bool residualDlss = config->DlssNrSuperiorResidualDlss.value_or_default();
+            const bool skipCarrier = config->DlssNrSuperiorSkipCarrier.value_or_default();
+            bool residualDlss = wantsResidualDlss;
+            ImGui::BeginDisabled(skipCarrier);
             if (ImGui::Checkbox("DLSS residual stabilization (experimental)", &residualDlss))
                 config->DlssNrSuperiorResidualDlss = residualDlss;
+            ImGui::EndDisabled();
             HelpMarker("Disable the private residual DLSS for comparison. NR, motion-vector conversion, frequency "
                        "shaping and guided reconstruction remain active. At 100% with Compress screen edges, "
                        "guided reconstruction runs only near/in compressed regions; the center keeps NR without "
@@ -3469,6 +3474,55 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
             HelpMarker("Superior Scaling: a private DLSS in DLAA mode, applied to NR's change at its working "
                        "resolution. Independent of the NR model preset and the game's own DLSS preset.");
             ImGui::EndDisabled();
+
+            if (ImGui::TreeNode("Superior stage bypasses (diagnostic)"))
+            {
+                ImGui::TextWrapped("Change one stage at a time. Each change resets NR and residual history. "
+                                   "All boxes clear restores the previous experimental behavior.");
+                const auto option = [&](const char* label, auto& setting, const char* help)
+                {
+                    bool value = setting.value_or_default();
+                    if (ImGui::Checkbox(label, &value))
+                        setting = value;
+                    HelpMarker(help);
+                };
+                option("Skip MV unit conversion", config->DlssNrSuperiorSkipMvUnits,
+                       "Use the original motion units before Compress endpoint mapping. Without Compress, keep the "
+                       "game scale for NR's matched vectors. Packed vectors are shared by NR and residual DLSS: "
+                       "test with residual DLSS off first. Depth and the endpoint transform stay active.");
+                option("Skip inter-pass correction", config->DlssNrSuperiorSkipInterPass,
+                       "Run every NR pass without Superior's corrective inter-passes. Final shaping still runs.");
+                option("Skip carrier encode/decode", config->DlssNrSuperiorSkipCarrier,
+                       "Use signed NR minus proxy directly, without the 0.5 offset or [-1,2] carrier clipping. "
+                       "FP16 residual storage stays. This temporarily disables residual DLSS; unchecking restores "
+                       "the saved DLSS choice.");
+                option("Skip guided reconstruction", config->DlssNrSuperiorSkipGuided,
+                       "Use bilinear residual reconstruction instead of the 3x3 guided filter. Compress still "
+                       "unwarps the result. Frequency shaping stays active.");
+                option("Skip final frequency shaping", config->DlssNrSuperiorSkipFinalShaping,
+                       "Set final high/medium and low gains to 1 and skip the final low field. "
+                       "Inter-pass shaping is a separate switch.");
+                option("Skip Compress correction for low", config->DlssNrSuperiorSkipCompressionLow,
+                       "Low uses Model resolution before Compress, just like high/medium. "
+                       "This changes both the inter-pass schedule and final gains.");
+                option("Skip cached warp lookup", config->DlssNrSuperiorSkipWarpCache,
+                       "Calculate the same Compress mapping directly instead of using its cached axis lookup.");
+                option("Use full-frame guided at 100%", config->DlssNrSuperiorFullGuided,
+                       "Disable this branch's uncompressed-center bypass. At 100% with Compress, guided runs "
+                       "across the whole frame again. No effect while guided reconstruction is skipped.");
+                if (ImGui::Button("Reset stage bypasses"))
+                {
+                    config->DlssNrSuperiorSkipMvUnits = false;
+                    config->DlssNrSuperiorSkipInterPass = false;
+                    config->DlssNrSuperiorSkipCarrier = false;
+                    config->DlssNrSuperiorSkipGuided = false;
+                    config->DlssNrSuperiorSkipFinalShaping = false;
+                    config->DlssNrSuperiorSkipCompressionLow = false;
+                    config->DlssNrSuperiorSkipWarpCache = false;
+                    config->DlssNrSuperiorFullGuided = false;
+                }
+                ImGui::TreePop();
+            }
 
             const auto unavailable = DlssNr::SuperiorScaling::Unavailable();
 

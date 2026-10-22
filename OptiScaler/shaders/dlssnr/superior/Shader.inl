@@ -19,6 +19,7 @@ namespace DlssNr::Superior::Bytecode
 #include "precompile/dlssnr_superior_normal_Shader.h"
 #include "precompile/dlssnr_superior_resolve_Shader.h"
 #include "precompile/dlssnr_superior_sdr_Shader.h"
+#include "precompile/host_residual_raw_Shader.h"
 } // namespace DlssNr::Superior::Bytecode
 
 bool DlssNr_Dx12::EnsureSuperiorRing()
@@ -131,6 +132,12 @@ bool DlssNr_Dx12::DispatchSuperiorPass(ID3D12GraphicsCommandList* InCmdList,
         }
         return _superiorPipeline[index];
     };
+    if (InConstants.Mode == 40u)
+    {
+        pipeline = get(16u, host_residual_raw_cso, sizeof(host_residual_raw_cso));
+        if (!pipeline)
+            return false;
+    }
     if (!pipeline && (InConstants.Mode == 37u || InConstants.Mode == 38u || InConstants.Mode == 39u))
         return false;
     if (!pipeline && InConstants.Mode == 34u)
@@ -245,6 +252,10 @@ namespace DlssNr::Superior::HostBytecode
 #include "precompile/host_native_cached_packed_hdr2_Shader.h"
 #include "precompile/host_native_cached_packed_hdr4_Shader.h"
 #include "precompile/host_native_cached_packed_hdr6_Shader.h"
+#include "precompile/host_skip_guided_hdr_Shader.h"
+#include "precompile/host_skip_guided_sdr_Shader.h"
+#include "precompile/host_skip_guided_packed_hdr_Shader.h"
+#include "precompile/host_skip_guided_packed_sdr_Shader.h"
 } // namespace DlssNr::Superior::HostBytecode
 
 ID3D12PipelineState* DlssNr_Dx12::SuperiorResolvePipeline(const DlssNrConstants& params, bool rawAnswer, bool packed,
@@ -260,13 +271,30 @@ ID3D12PipelineState* DlssNr_Dx12::SuperiorResolvePipeline(const DlssNrConstants&
         std::call_once(once, [] { LOG_ERROR("Superior Scaling: packed resolve asked for a raw NR answer; skipped"); });
         return nullptr;
     }
+    const auto diagnostics = DlssNr::SuperiorScaling::Diagnostics::Mask(*Config::Instance());
+    if (!rawAnswer && (diagnostics & DlssNr::SuperiorScaling::Diagnostics::Guided))
+    {
+        const unsigned i = (packed ? 2u : 0u) + (params.Passthrough ? 1u : 0u);
+        if (!_superiorSkipGuidedAttempted[i])
+        {
+            _superiorSkipGuidedAttempted[i] = true;
+            const void* blobs[] { host_skip_guided_hdr_cso, host_skip_guided_sdr_cso, host_skip_guided_packed_hdr_cso,
+                                  host_skip_guided_packed_sdr_cso };
+            const size_t sizes[] { sizeof(host_skip_guided_hdr_cso), sizeof(host_skip_guided_sdr_cso),
+                                   sizeof(host_skip_guided_packed_hdr_cso), sizeof(host_skip_guided_packed_sdr_cso) };
+            CreateComputePipeline(_device, &_superiorSkipGuided[i], blobs[i], sizes[i], nullptr);
+        }
+        // A failed diagnostic must not silently execute the stage the user asked to skip.
+        return _superiorSkipGuided[i];
+    }
     int normal =
         DlssNr::SuperiorScaling::NormalResolveVariant(rawAnswer, packed, params.Passthrough, params.ReversibleMode,
                                                       params.DebugView, params.CompareMode, params.ApplyModel);
     if (normal >= 5 && cachedWarp)
         normal += 5;
     // Keep all below-native PSOs byte-identical. Native identity-region filtering gets separate PSOs.
-    if (packed && !rawAnswer && params.ModelWorkScale == 1.0f)
+    if (packed && !rawAnswer && params.ModelWorkScale == 1.0f &&
+        DlssNr::SuperiorScaling::Diagnostics::NativeCenter(diagnostics))
     {
         const void* blobs[] { host_native_cached_packed_sdr_cso,  host_native_cached_packed_hdr0_cso,
                               host_native_cached_packed_hdr2_cso, host_native_cached_packed_hdr4_cso,

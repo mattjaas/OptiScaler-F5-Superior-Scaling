@@ -495,6 +495,14 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrTransfer.set_from_config(readUInt("DlssNr", "Transfer"));
             DlssNrSuperiorScalingPreset.set_from_config(readUInt("DlssNr", "SuperiorScalingPreset"));
             DlssNrSuperiorResidualDlss.set_from_config(readBool("DlssNr", "SuperiorResidualDlss"));
+            DlssNrSuperiorSkipMvUnits.set_from_config(readBool("DlssNr", "SuperiorSkipMvUnits"));
+            DlssNrSuperiorSkipInterPass.set_from_config(readBool("DlssNr", "SuperiorSkipInterPass"));
+            DlssNrSuperiorSkipCarrier.set_from_config(readBool("DlssNr", "SuperiorSkipCarrier"));
+            DlssNrSuperiorSkipGuided.set_from_config(readBool("DlssNr", "SuperiorSkipGuided"));
+            DlssNrSuperiorSkipFinalShaping.set_from_config(readBool("DlssNr", "SuperiorSkipFinalShaping"));
+            DlssNrSuperiorSkipCompressionLow.set_from_config(readBool("DlssNr", "SuperiorSkipCompressionLow"));
+            DlssNrSuperiorSkipWarpCache.set_from_config(readBool("DlssNr", "SuperiorSkipWarpCache"));
+            DlssNrSuperiorFullGuided.set_from_config(readBool("DlssNr", "SuperiorFullGuided"));
 
             DlssNrWhitePointFromExposure.set_from_config(readBool("DlssNr", "WhitePointFromExposure"));
             DlssNrProbeD3D11.set_from_config(readBool("DlssNr", "ProbeD3D11"));
@@ -1645,6 +1653,22 @@ bool Config::SaveIni()
                  GetIntValue(Instance()->DlssNrSuperiorScalingPreset.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorResidualDlss",
                  GetBoolValue(Instance()->DlssNrSuperiorResidualDlss.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipMvUnits",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipMvUnits.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipInterPass",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipInterPass.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipCarrier",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipCarrier.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipGuided",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipGuided.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipFinalShaping",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipFinalShaping.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipCompressionLow",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipCompressionLow.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorSkipWarpCache",
+                 GetBoolValue(Instance()->DlssNrSuperiorSkipWarpCache.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorFullGuided",
+                 GetBoolValue(Instance()->DlssNrSuperiorFullGuided.value_for_config()).c_str());
 
     ini.SetValue("DlssNr", "ProbeD3D11",
                  GetBoolValue(Instance()->DlssNrProbeD3D11.value_for_config()).c_str());

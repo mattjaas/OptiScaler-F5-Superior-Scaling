@@ -21,6 +21,17 @@ float3 ReferenceShapeNative(float3 edit, float2 packedUv)
 #endif
 float3 SuperiorGuidedEdit(float2 uv, float3 nativeGuide)
 {
+#if defined(DLSSNR_SUPERIOR_SKIP_GUIDED)
+    float2 query = uv;
+#if defined(DLSSNR_SUPERIOR_HOST_PACKED)
+    query = PackedReferenceUv(uv);
+#endif
+    const float3 edit = gModel.SampleLevel(gLinear, saturate(query), 0).rgb;
+    return gGuideWidth != 0u ? gMvScaleX * edit + (gMvScaleY-gMvScaleX) *
+        gSuperiorLow.SampleLevel(gLinear, query, 0).rgb : edit;
+#elif defined(DLSSNR_SUPERIOR_FORCE_FULL_GUIDED)
+    return ReferenceFullGuidedEdit(uv, nativeGuide, false);
+#else
 #if defined(DLSSNR_SUPERIOR_HOST_PACKED)
     if (gGuideHeight == 0u)
     {
@@ -52,4 +63,5 @@ float3 SuperiorGuidedEdit(float2 uv, float3 nativeGuide)
     }
 #endif
     return ReferenceFullGuidedEdit(uv, nativeGuide, false);
+#endif
 }

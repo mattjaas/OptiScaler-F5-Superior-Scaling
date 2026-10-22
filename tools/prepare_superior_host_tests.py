@@ -105,13 +105,19 @@ else:
     compile_shader(host / 'dlssnr.hlsl', 'upstream_recompiled')
 # No assertion against a shipped default blob: precompile/DlssNr_Shader.cso is janblade's and changes with every
 # default-shader change; it is not part of Superior's validation.
-for variant in ('hdr', 'sdr', 'raw_hdr', 'raw_sdr', 'packed_hdr', 'packed_sdr'):
+for variant in ('hdr', 'sdr', 'raw_hdr', 'raw_sdr', 'packed_hdr', 'packed_sdr',
+                'skip_guided_hdr', 'skip_guided_sdr', 'skip_guided_packed_hdr', 'skip_guided_packed_sdr',
+                'full_packed_hdr', 'full_packed_sdr'):
     defines = ['DLSSNR_SUPERIOR_HOST_RESOLVE=1', 'DLSSNR_SUPERIOR_RESOLVE=1', 'DLSSNR_SUPERIOR_NORMAL=1']
     if variant.endswith('sdr'):
         defines += ['DLSSNR_SUPERIOR_SDR=1', 'DLSSNR_SUPERIOR_HOST_SDR=1']
     if variant.startswith('raw_'):
         defines += ['DLSSNR_SUPERIOR_HOST_RAW=1']
-    if variant.startswith('packed_'):
+    if 'packed_' in variant:
         defines += ['DLSSNR_SUPERIOR_HOST_PACKED=1']
+    if variant.startswith('skip_guided_'):
+        defines += ['DLSSNR_SUPERIOR_SKIP_GUIDED=1']
+    if variant.startswith('full_'):
+        defines += ['DLSSNR_SUPERIOR_FORCE_FULL_GUIDED=1']
     compile_shader(out / 'reference.hlsl', 'reference_' + variant, defines)
 print('Host reference shaders compiled')

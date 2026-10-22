@@ -1,5 +1,6 @@
 #pragma once
 #include "DlssNr_SuperiorScaling.h"
+#include "DlssNr_SuperiorDiagnostics.h"
 #include "DlssNr_GuidedShaping.h"
 #include "DlssNr_InterPassPolicy.h"
 #include "PassProfiles.h"

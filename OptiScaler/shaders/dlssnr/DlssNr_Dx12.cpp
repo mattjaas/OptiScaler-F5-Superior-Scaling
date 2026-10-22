@@ -2279,6 +2279,9 @@ DlssNr_Dx12::~DlssNr_Dx12()
     for (auto* pipeline : _superiorNativeResolve)
         if (pipeline)
             pipeline->Release();
+    for (auto* pipeline : _superiorSkipGuided)
+        if (pipeline)
+            pipeline->Release();
     for (auto* pipeline : _superiorNormalResolve)
         if (pipeline)
             pipeline->Release();
@@ -2943,15 +2946,20 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // ordinary path runs, with Matched residual in its place. Selecting it again retries.
     const bool superiorSelected = DlssNr::SuperiorScaling::Enabled(cfg);
     auto& superiorState = SuperiorRun::GetState();
-    const bool residualDlss = cfg.DlssNrSuperiorResidualDlss.value_or_default();
-    if (superiorState.wasSelected != superiorSelected || superiorState.wasResidualDlss != residualDlss)
+    const auto superiorDiagnostics = DlssNr::SuperiorScaling::Diagnostics::Mask(cfg);
+    const bool residualDlss = DlssNr::SuperiorScaling::Diagnostics::PrivateDlss(
+        cfg.DlssNrSuperiorResidualDlss.value_or_default(), superiorDiagnostics);
+    if (superiorState.wasSelected != superiorSelected || superiorState.wasResidualDlss != residualDlss ||
+        superiorState.wasDiagnostics != superiorDiagnostics)
     {
         superiorState.wasSelected = superiorSelected;
         superiorState.wasResidualDlss = residualDlss;
+        superiorState.wasDiagnostics = superiorDiagnostics;
         superiorState.unavailable.clear();
         superiorState.srUnavailable = false;
         if (superiorSelected)
         {
+            LOG_INFO("Superior diagnostic bypass mask: 0x{:02X}; residual DLSS {}", superiorDiagnostics, residualDlss);
             SuperiorRun::Drop();
             g_nr.reset = true;
         }
@@ -4568,7 +4576,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 ? DlssNr::GuideExtent { frame.RenderSubrectWidth, frame.RenderSubrectHeight }
                 : DlssNr::GuideExtent { frame.OutputWidth, frame.OutputHeight };
         auto guideConstants = DlssNr::Spatial::MakeEnlargementGuideConstants(
-            superior, spatialLayout, guides, motionReference, g_nr.guideMvScaleX, g_nr.guideMvScaleY);
+            superior && !(superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::MvUnits), spatialLayout, guides,
+            motionReference, g_nr.guideMvScaleX, g_nr.guideMvScaleY);
 
         if (!guides.depth.valid())
         {
@@ -4825,12 +4834,15 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
 
     auto* superiorGeneration = superior ? superiorState.current.get() : nullptr;
-    const auto superiorGainScales = superior ? DlssNr::SuperiorScaling::MakeFrequencyScales(
-                                                   width, height, workWidth, workHeight, modelWidth, modelHeight)
+    const auto superiorGainScales = superior ? DlssNr::SuperiorScaling::Diagnostics::Scales(
+                                                   DlssNr::SuperiorScaling::MakeFrequencyScales(
+                                                       width, height, workWidth, workHeight, modelWidth, modelHeight),
+                                                   superiorDiagnostics)
                                              : DlssNr::SuperiorScaling::FrequencyScales { workScale, workScale };
-    const auto superiorSchedule = superior ? DlssNr::SuperiorScaling::Schedule(cfg, effectivePasses, superiorGainScales,
-                                                                               g_nr.superiorMainOnlyGains)
-                                           : DlssNr::InterPass::GainSchedule {};
+    const auto superiorSchedule =
+        superior && !(superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::InterPass)
+            ? DlssNr::SuperiorScaling::Schedule(cfg, effectivePasses, superiorGainScales, g_nr.superiorMainOnlyGains)
+            : DlssNr::InterPass::GainSchedule {};
     unsigned superiorCovered = 0, superiorCompleted = 0;
     bool superiorBoundaryFailed = false;
     uint32_t superiorMask = 0, superiorClampSlots[4] { UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX };
@@ -5071,7 +5083,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             evalDepthX = evalDepthY = evalMotionBaseX = evalMotionBaseY = 0;
         }
     }
-    if (superiorMatched)
+    if (superiorMatched && !(superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::MvUnits))
     {
         // NR reads displacement in pixels of its motion subrect: the matched grid. Only when the temporal path matched
         // the guides above; otherwise ordinary NR keeps its own guideMvScale * work / width units (see g_nr.guideMvScaleX).
@@ -5083,6 +5095,11 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             frame.MotionVectorsLowResolution ? frame.RenderSubrectHeight : frame.OutputHeight, guides.motion.height);
     }
     const bool superiorReset = g_nr.reset || frame.Reset;
+    if (superiorMatched && (superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::MvUnits))
+    {
+        evalMvScaleX = frame.MvScaleX;
+        evalMvScaleY = frame.MvScaleY;
+    }
 
     // The model's own time: the passes alone, so the detail reuse work above counts as surrounding work (and a reused
     // frame's model time is about zero).
@@ -5667,8 +5684,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                                                  g.packed ? EdgeCompression::depth : nullptr,
                                                                  g.packed ? EdgeCompression::motion : nullptr)
                                         : resolveAnswer;
-            const auto gains = DlssNr::SuperiorScaling::BlockGains(cfg, superiorCovered, superiorCompleted,
-                                                                   superiorGainScales, g_nr.superiorMainOnlyGains);
+            const auto gains = DlssNr::SuperiorScaling::Diagnostics::FinalGains(
+                DlssNr::SuperiorScaling::BlockGains(cfg, superiorCovered, superiorCompleted, superiorGainScales,
+                                                    g_nr.superiorMainOnlyGains),
+                superiorDiagnostics);
             auto* low = residual && (gains.high != 1.0f || gains.low != 1.0f)
                             ? SuperiorRun::FinalLow(g, *this, cmdList, shapingProxy, residual, g.temporal)
                             : nullptr;

@@ -85,6 +85,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     bool _superiorNormalResolveAttempted[15] {};
     ID3D12PipelineState* _superiorNativeResolve[7] {};
     bool _superiorNativeResolveAttempted[7] {};
+    ID3D12PipelineState* _superiorSkipGuided[4] {};
+    bool _superiorSkipGuidedAttempted[4] {};
     ID3D12PipelineState* _superiorWarpCache = nullptr;
     bool _superiorWarpCacheAttempted = false;
     ID3D12PipelineState* SuperiorResolvePipeline(const DlssNrConstants& params, bool rawAnswer, bool packed,
@@ -92,8 +94,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     ID3D12PipelineState* _superiorRawLow = nullptr;
     bool _superiorRawLowAttempted = false;
     ID3D12PipelineState* SuperiorRawLowPipeline();
-    ID3D12PipelineState* _superiorPipeline[16] {};
-    bool _superiorAttempted[16] {};
+    ID3D12PipelineState* _superiorPipeline[17] {};
+    bool _superiorAttempted[17] {};
     ID3D12PipelineState* SuperiorPipeline(const DlssNr::Superior::DlssNrConstants&, ID3D12Resource*);
 
     // The shader reads five inputs and writes two, and not every mode uses all of them. Unused slots
