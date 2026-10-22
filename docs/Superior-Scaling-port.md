@@ -1,5 +1,9 @@
 # Superior Scaling port
 
+**Experimental branch:** see [native-center reconstruction and the residual-DLSS checkbox](Superior-native-residual-experiment.md).
+At 100% + Compress this branch restores the center bypass described there; the full-frame-guided
+description below documents the merged baseline, not that experimental difference.
+
 Upstream: janblade `main`, `2a5be38d` (0.1.33). Superior reconstruction reference: mattjaas v59, `914d8d1f50f2d52b11f9bacd7b6bf8fd7966d9e2`.
 
 ## Scope

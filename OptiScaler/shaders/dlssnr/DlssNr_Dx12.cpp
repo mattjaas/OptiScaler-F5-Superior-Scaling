@@ -2276,6 +2276,9 @@ DlssNr_Dx12::~DlssNr_Dx12()
         _superiorRawLow->Release();
     if (_superiorWarpCache)
         _superiorWarpCache->Release();
+    for (auto* pipeline : _superiorNativeResolve)
+        if (pipeline)
+            pipeline->Release();
     for (auto* pipeline : _superiorNormalResolve)
         if (pipeline)
             pipeline->Release();
@@ -2940,10 +2943,18 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // ordinary path runs, with Matched residual in its place. Selecting it again retries.
     const bool superiorSelected = DlssNr::SuperiorScaling::Enabled(cfg);
     auto& superiorState = SuperiorRun::GetState();
-    if (superiorState.wasSelected != superiorSelected)
+    const bool residualDlss = cfg.DlssNrSuperiorResidualDlss.value_or_default();
+    if (superiorState.wasSelected != superiorSelected || superiorState.wasResidualDlss != residualDlss)
     {
         superiorState.wasSelected = superiorSelected;
+        superiorState.wasResidualDlss = residualDlss;
         superiorState.unavailable.clear();
+        superiorState.srUnavailable = false;
+        if (superiorSelected)
+        {
+            SuperiorRun::Drop();
+            g_nr.reset = true;
+        }
     }
     const bool superior = superiorSelected && superiorState.unavailable.empty();
     if (superiorState.wasActive != superior)
@@ -5039,7 +5050,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     unsigned int evalMotionBaseY = cachePlan.runs ? cachePlan.motionBaseY : reusePlan.motionBaseY;
 
     bool superiorMatched = false;
-    if (superiorGeneration && superiorGeneration->temporal && !superiorPacked && !cached)
+    if (superiorGeneration && superiorGeneration->temporal && !superiorPacked && !cached && depthIn)
     {
         auto matchedRegions = guides;
         matchedRegions.motion.x = evalMotionBaseX;

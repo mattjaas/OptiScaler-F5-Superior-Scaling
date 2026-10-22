@@ -83,6 +83,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     bool _superiorResolveAttempted[6] {};
     ID3D12PipelineState* _superiorNormalResolve[15] {};
     bool _superiorNormalResolveAttempted[15] {};
+    ID3D12PipelineState* _superiorNativeResolve[7] {};
+    bool _superiorNativeResolveAttempted[7] {};
     ID3D12PipelineState* _superiorWarpCache = nullptr;
     bool _superiorWarpCacheAttempted = false;
     ID3D12PipelineState* SuperiorResolvePipeline(const DlssNrConstants& params, bool rawAnswer, bool packed,

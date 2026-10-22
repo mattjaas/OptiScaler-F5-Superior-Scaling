@@ -238,6 +238,13 @@ namespace DlssNr::Superior::HostBytecode
 #include "precompile/host_cached_packed_hdr4_Shader.h"
 #include "precompile/host_cached_packed_hdr6_Shader.h"
 #include "precompile/host_warp_cache_Shader.h"
+#include "precompile/host_native_packed_hdr_Shader.h"
+#include "precompile/host_native_packed_sdr_Shader.h"
+#include "precompile/host_native_cached_packed_sdr_Shader.h"
+#include "precompile/host_native_cached_packed_hdr0_Shader.h"
+#include "precompile/host_native_cached_packed_hdr2_Shader.h"
+#include "precompile/host_native_cached_packed_hdr4_Shader.h"
+#include "precompile/host_native_cached_packed_hdr6_Shader.h"
 } // namespace DlssNr::Superior::HostBytecode
 
 ID3D12PipelineState* DlssNr_Dx12::SuperiorResolvePipeline(const DlssNrConstants& params, bool rawAnswer, bool packed,
@@ -258,6 +265,32 @@ ID3D12PipelineState* DlssNr_Dx12::SuperiorResolvePipeline(const DlssNrConstants&
                                                       params.DebugView, params.CompareMode, params.ApplyModel);
     if (normal >= 5 && cachedWarp)
         normal += 5;
+    // Keep all below-native PSOs byte-identical. Native identity-region filtering gets separate PSOs.
+    if (packed && !rawAnswer && params.ModelWorkScale == 1.0f)
+    {
+        const void* blobs[] { host_native_cached_packed_sdr_cso,  host_native_cached_packed_hdr0_cso,
+                              host_native_cached_packed_hdr2_cso, host_native_cached_packed_hdr4_cso,
+                              host_native_cached_packed_hdr6_cso, host_native_packed_hdr_cso,
+                              host_native_packed_sdr_cso };
+        const size_t sizes[] { sizeof(host_native_cached_packed_sdr_cso),  sizeof(host_native_cached_packed_hdr0_cso),
+                               sizeof(host_native_cached_packed_hdr2_cso), sizeof(host_native_cached_packed_hdr4_cso),
+                               sizeof(host_native_cached_packed_hdr6_cso), sizeof(host_native_packed_hdr_cso),
+                               sizeof(host_native_packed_sdr_cso) };
+        const auto getNative = [&](unsigned index) -> ID3D12PipelineState*
+        {
+            if (!_superiorNativeResolveAttempted[index])
+            {
+                _superiorNativeResolveAttempted[index] = true;
+                CreateComputePipeline(_device, &_superiorNativeResolve[index], blobs[index], sizes[index], nullptr);
+            }
+            return _superiorNativeResolve[index];
+        };
+        if (normal >= 10)
+            if (auto* pso = getNative(unsigned(normal - 10)))
+                return pso;
+        if (auto* pso = getNative(params.Passthrough ? 6u : 5u))
+            return pso;
+    }
     if (normal >= 0)
     {
         auto*& pso = _superiorNormalResolve[normal];

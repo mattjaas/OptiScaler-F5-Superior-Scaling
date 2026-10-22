@@ -80,6 +80,11 @@ reference = reference.replace('    if (gGuideHeight != 0u)', """#if defined(DLSS
 #endif
     if (gGuideHeight != 0u)""")
 reference = packed_reference + '\nTexture2D<float4> gSuperiorLow : register(t5);\n' + reference
+reference = reference.replace('float3 SuperiorGuidedEdit(float2 uvq, float3 nativeGuide)',
+                              'float3 ReferenceFullGuidedEdit(float2 uvq, float3 nativeGuide, bool rawResult)')
+reference = reference.replace('return gGuideWidth != 0u ? gMvScaleX * guided',
+                              'return rawResult ? guided : gGuideWidth != 0u ? gMvScaleX * guided')
+reference += '\n' + (root / 'tests/nr_gpu/native_center_reference.hlsli').read_text(encoding='utf-8')
 reference_source = source.replace('#include "../superior/HostResolve.hlsli"', reference)
 (out / 'reference.hlsl').write_text(reference_source, encoding='utf-8')
 

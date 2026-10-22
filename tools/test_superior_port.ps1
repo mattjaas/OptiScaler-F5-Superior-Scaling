@@ -21,7 +21,9 @@ param(
     [switch]$GpuPackedTiming,
     [switch]$GpuHostOptTiming,
     [switch]$GpuCandidates,
-    [switch]$GpuCandidateTiming
+    [switch]$GpuCandidateTiming,
+    [switch]$GpuNativeCenter,
+    [switch]$GpuNativeCenterTiming
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -73,6 +75,11 @@ try {
         $GpuHostOptTiming = $false
     }
     if ($GpuHost -and !(Prepare 'Host reference shaders' @('tools/prepare_superior_host_tests.py'))) { $GpuHost = $false }
+    if ($GpuNativeCenter -or $GpuNativeCenterTiming) {
+        if (!(Prepare 'Native center reference' @('tools/prepare_native_center_tests.py'))) {
+            $GpuNativeCenter = $false; $GpuNativeCenterTiming = $false
+        }
+    }
     if (($GpuCandidates -or $GpuCandidateTiming) -and !(Prepare 'Candidate shaders' @('tools/prepare_superior_candidates.py'))) {
         $GpuCandidates = $false; $GpuCandidateTiming = $false
     }
@@ -85,6 +92,8 @@ try {
     if ($GpuPackedTiming) { $names += 'packed_stage_timing' }
     if ($GpuHostOptTiming) { $names += 'host_opt_timing' }
     if ($GpuHost) { $names += @('superior_host_quality', 'packed_host_quality') }
+    if ($GpuNativeCenter -or $GpuNativeCenterTiming) { $names += @('native_center_mask', 'carrier_bypass_quality') }
+    if ($GpuNativeCenterTiming) { $names += 'native_center_timing' }
     if ($GpuCandidates -or $GpuCandidateTiming) {
         $names += @('four_candidates_quality', 'fused_pack_experiment')
         if ($GpuCandidateTiming) { $names += 'four_candidates_timing' }
@@ -127,6 +136,16 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Host composition comparison failed' }
         & "$out/packed_host_quality.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Packed host composition comparison failed' }
+    }
+    if ($GpuNativeCenter -or $GpuNativeCenterTiming) {
+        & "$out/native_center_mask.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Native center mask failed' }
+        & "$out/carrier_bypass_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'No-DLSS carrier roundtrip failed' }
+    }
+    if ($GpuNativeCenterTiming) {
+        & "$out/native_center_timing.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Native center timing failed' }
     }
     if ($GpuSpatialTiming) {
         & "$out/spatial_timing.exe"

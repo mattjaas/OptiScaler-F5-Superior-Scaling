@@ -6,16 +6,49 @@ Texture2D<float4> gSuperiorLow : register(t5);
 #include "WarpMap.hlsli"
 #if defined(DLSSNR_SUPERIOR_HOST_CACHED)
 static uint2 gSuperiorPixel;
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+static float4 gNativeAxisX, gNativeAxisY;
+#endif
 #endif
 float2 SuperiorPackedUv(float2 uv)
 {
 #if defined(DLSSNR_SUPERIOR_HOST_CACHED)
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+    gNativeAxisX = gMotion.Load(int3(gSuperiorPixel.x, 1, 0));
+    gNativeAxisY = gMotion.Load(int3(gSuperiorPixel.y, 2, 0));
+    return float2(gNativeAxisX.x, gNativeAxisY.x);
+#else
     return float2(gMotion.Load(int3(gSuperiorPixel.x, 1, 0)).x,
                   gMotion.Load(int3(gSuperiorPixel.y, 2, 0)).x);
+#endif
 #else
     return SuperiorArithmeticPackedUv(uv);
 #endif
 }
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+float SuperiorNativeGuidedWeight(float2 nativePixel)
+{
+#if defined(DLSSNR_SUPERIOR_HOST_CACHED)
+    return 1.0 - (1.0 - gNativeAxisX.y) * (1.0 - gNativeAxisY.y);
+#else
+    const float2 delta = nativePixel - gBandCenter.xy;
+    const float2 span = float2(delta.x >= 0.0 ? gSidePos.x : gSideNeg.x,
+                               delta.y >= 0.0 ? gSidePos.y : gSideNeg.y);
+    const float2 center = float2(delta.x >= 0.0 ? gSidePos.z : gSideNeg.z,
+                                 delta.y >= 0.0 ? gSidePos.w : gSideNeg.w);
+    const float2 work = float2(delta.x >= 0.0 ? gSideWorkPos.x : gSideWorkNeg.x,
+                               delta.y >= 0.0 ? gSideWorkPos.y : gSideWorkNeg.y);
+    // Start blending four native pixels before a footprint touches compression.
+    // Every compressed footprint therefore uses the full guided filter; the inner centre stays direct.
+    const float2 distance = abs(delta) - center * span + 4.5;
+    const float2 weight = float2(work.x >= 1.0 || center.x >= 1.0 ? 0.0 : saturate(distance.x * 0.25),
+                                 work.y >= 1.0 || center.y >= 1.0 ? 0.0 : saturate(distance.y * 0.25));
+    const float2 smoothWeight = weight * weight * (3.0 - 2.0 * weight);
+    // A smooth union also avoids a diagonal max(x,y) crease at the centre rectangle's corners.
+    return 1.0 - (1.0 - smoothWeight.x) * (1.0 - smoothWeight.y);
+#endif
+}
+#endif
 #endif
 float3 SuperiorShapeEdit(float3 edit, float2 uvq)
 {
@@ -34,9 +67,40 @@ float3 SuperiorGuidedEdit(float2 uvq, float3 nativeGuide)
                                                  gSource.SampleLevel(gLinear, uvq, 0).rgb, 0.0), uvq);
     uint srcW, srcH;
     gSource.GetDimensions(srcW, srcH);
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+    float guidedWeight = 1.0;
+#endif
 #if defined(DLSSNR_SUPERIOR_HOST_PACKED)
     // Map the native query directly to the packed lattice; no bilinear intermediate images.
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+    const float2 nativePixel = uvq * float2(gWidth, gHeight);
+#endif
     uvq = SuperiorPackedUv(uvq);
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+#if defined(DLSSNR_SUPERIOR_HOST_CACHED)
+    const bool nativeIdentity = gNativeAxisX.w == 1.0 && gNativeAxisY.w == 1.0;
+#else
+    const bool nativeIdentity = all(gWorkScale.xy == 1.0);
+#endif
+    [branch] if (gModelWorkScale == 1.0 && nativeIdentity)
+    {
+        guidedWeight = SuperiorNativeGuidedWeight(nativePixel);
+        [branch] if (guidedWeight == 0.0)
+        {
+            // The native packer moves this region by whole texels. Keep the stabilized NR edit,
+            // frequency shaping and composition; bypass only the nine-tap guided reconstruction.
+#if defined(DLSSNR_SUPERIOR_HOST_CACHED)
+            const int2 p = clamp(int2(gNativeAxisX.z, gNativeAxisY.z), int2(0, 0), int2(srcW, srcH) - 1);
+#else
+            const int2 shift = int2(round(gBandCenter.zw - gBandCenter.xy));
+            const int2 p = clamp(int2(nativePixel) + shift, int2(0, 0), int2(srcW, srcH) - 1);
+#endif
+            const float3 direct = gCompareMode == 1u ? gModel.SampleLevel(gLinear, uvq, 0).rgb
+                                                    : gModel.Load(int3(p, 0)).rgb;
+            return SuperiorShapeEdit(SanitizeFinite3(direct, 0.0), uvq);
+        }
+    }
+#endif
 #endif
     const float3 fallback = SanitizeFinite3(gModel.SampleLevel(gLinear, saturate(uvq), 0).rgb, 0.0);
     const float rangeSigma = max(abs(0.015), 1e-5);
@@ -78,5 +142,9 @@ float3 SuperiorGuidedEdit(float2 uvq, float3 nativeGuide)
         }
     }
     float3 edit = weightSum > 1e-8 ? weighted / weightSum : fallback;
+#if defined(DLSSNR_SUPERIOR_NATIVE_CENTER)
+    [branch] if (guidedWeight < 1.0)
+        edit = lerp(fallback, edit, guidedWeight);
+#endif
     return SuperiorShapeEdit(edit, uvq);
 }

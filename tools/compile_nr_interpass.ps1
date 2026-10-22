@@ -115,10 +115,16 @@ try {
     $hostVariants += @("normal_sdr", "normal_hdr0", "normal_hdr2", "normal_hdr4", "normal_hdr6",
                        "normal_packed_sdr", "normal_packed_hdr0", "normal_packed_hdr2", "normal_packed_hdr4", "normal_packed_hdr6")
     $hostVariants += @('cached_packed_sdr', 'cached_packed_hdr0', 'cached_packed_hdr2', 'cached_packed_hdr4', 'cached_packed_hdr6')
+    $hostVariants += @('native_packed_hdr', 'native_packed_sdr', 'native_cached_packed_sdr',
+                       'native_cached_packed_hdr0', 'native_cached_packed_hdr2', 'native_cached_packed_hdr4', 'native_cached_packed_hdr6')
     foreach ($variant in $hostVariants) {
-        $specialized = $variant.StartsWith('normal_') -or $variant.StartsWith('cached_')
+        $native = $variant.StartsWith('native_')
+        $cached = $variant.Contains('cached_')
+        $specialized = $variant.StartsWith('normal_') -or $cached
         $stem = if ($specialized) { "host_$variant" } else { "host_resolve_$variant" }
+        if ($native) { $stem = "host_$variant" }
         $defines = @("-D", "DLSSNR_SUPERIOR_HOST_RESOLVE=1")
+        if ($native) { $defines += @('-D', 'DLSSNR_SUPERIOR_NATIVE_CENTER=1') }
         if ($variant.EndsWith("sdr")) { $defines += @("-D", "DLSSNR_SUPERIOR_HOST_SDR=1") }
         if ($variant -eq "raw") { $defines += @("-D", "DLSSNR_SUPERIOR_HOST_RAW=1") }
         if ($variant.Contains("packed_")) { $defines += @("-D", "DLSSNR_SUPERIOR_HOST_PACKED=1") }
@@ -128,7 +134,7 @@ try {
             $defines += @('-D', 'DLSSNR_SUPERIOR_HOST_NORMAL=1', '-D', "DLSSNR_SUPERIOR_HOST_PASSTHROUGH=$pass",
                           '-D', "DLSSNR_SUPERIOR_HOST_MAPPING=$mapping")
         }
-        if ($variant.StartsWith('cached_')) { $defines += @('-D', 'DLSSNR_SUPERIOR_HOST_CACHED=1') }
+        if ($cached) { $defines += @('-D', 'DLSSNR_SUPERIOR_HOST_CACHED=1') }
         Build $live "CSMain" $defines $stem
     }
     Build (Join-Path $shaders "superior/WarpCache.hlsl") "CSMain" @() "host_warp_cache"

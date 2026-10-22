@@ -3411,7 +3411,8 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
         const bool superior = DlssNr::SuperiorScaling::Enabled(*config);
 
         // Superior needs D3D12 (or a D3D12 bridge) and NVIDIA's DLSS SR through NGX for its temporal part.
-        const bool superiorBlocked = nr.vulkan || DlssNr::SuperiorScaling::SrUnavailable();
+        const bool superiorBlocked = nr.vulkan || (config->DlssNrSuperiorResidualDlss.value_or_default() &&
+                                                   DlssNr::SuperiorScaling::SrUnavailable());
 
         if (!reduced && !superior)
             ImGui::BeginDisabled();
@@ -3450,6 +3451,14 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
 
         if (superior)
         {
+            bool residualDlss = config->DlssNrSuperiorResidualDlss.value_or_default();
+            if (ImGui::Checkbox("DLSS residual stabilization (experimental)", &residualDlss))
+                config->DlssNrSuperiorResidualDlss = residualDlss;
+            HelpMarker("Disable the private residual DLSS for comparison. NR, motion-vector conversion, frequency "
+                       "shaping and guided reconstruction remain active. At 100% with Compress screen edges, "
+                       "guided reconstruction runs only near/in compressed regions; the center keeps NR without "
+                       "the guided filter. Disabling DLSS may increase flicker or instability in motion.");
+            ImGui::BeginDisabled(!residualDlss);
             static const char* presets[] = { "A - higher performance", "K - slower, more stable NR in motion" };
             int preset =
                 DlssNr::SuperiorScaling::Preset(config->DlssNrSuperiorScalingPreset.value_or_default()) == 11 ? 1 : 0;
@@ -3459,6 +3468,7 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
 
             HelpMarker("Superior Scaling: a private DLSS in DLAA mode, applied to NR's change at its working "
                        "resolution. Independent of the NR model preset and the game's own DLSS preset.");
+            ImGui::EndDisabled();
 
             const auto unavailable = DlssNr::SuperiorScaling::Unavailable();
 

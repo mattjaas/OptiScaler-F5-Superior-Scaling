@@ -37,7 +37,8 @@ struct Generation
     unsigned width = 0, height = 0, workWidth = 0, workHeight = 0;
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     bool inverted = false, beforeSr = false, reset = true;
-    bool temporal = false, packed = false;
+    // temporal retains the signed-residual guided reconstruction path; stabilize selects private NGX inference.
+    bool temporal = false, stabilize = true, packed = false;
     DlssNr::Spatial::Layout layout {};
     Texture warp, warpCache;
     ComPtr<ID3D12Resource> warpUpload;
@@ -118,7 +119,7 @@ struct State
 {
     DlssNr::GpuLifetime lifetime { &Destroyed };
     std::shared_ptr<Generation> current;
-    bool wasSelected = false, wasActive = false;
+    bool wasSelected = false, wasActive = false, wasResidualDlss = true;
     std::string status;
     std::string unavailable;   // why Superior is not running this session; empty while it runs
     bool srUnavailable = false; // the NGX DLSS SR runtime itself failed: the menu greys Superior out
@@ -429,6 +430,24 @@ ID3D12Resource* Stabilize(Generation& g, DlssNr_Dx12& shader, ID3D12GraphicsComm
                           const DlssNrFrameInfo& frame, bool reset, bool hold, ID3D12Resource* packedDepth,
                           ID3D12Resource* packedMotion)
 {
+    if (!g.stabilize)
+    {
+        if (!Ensure(g.carrier, g.device.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, g.workWidth, g.workHeight) ||
+            !Ensure(g.temporalOutput, g.device.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT, g.workWidth, g.workHeight))
+            return nullptr;
+        Constants c {};
+        // Same encode, FP16 carrier storage and decode as the temporal path; only NGX inference is skipped.
+        c.Mode = 37u;
+        c.Width = g.workWidth;
+        c.Height = g.workHeight;
+        if (!Dispatch(shader, cmd, c, proxy, answer, nullptr, nullptr, nullptr, nullptr, g.temporalOutput))
+            return nullptr;
+        c.Mode = 38u;
+        if (!Dispatch(shader, cmd, c, g.temporalOutput.Get(), nullptr, nullptr, nullptr, nullptr, nullptr, g.carrier))
+            return nullptr;
+        g.reset = false;
+        return g.carrier.Get();
+    }
     if (!g.feature || !g.parameters || !NgxAlive(g.ngxEpoch))
         return nullptr;
     auto encode = GuideConstants(g.workWidth, g.workHeight, regions, frame, true, hold);
@@ -499,7 +518,8 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
     auto& state = GetState();
     g_used = true;
     state.lifetime.Collect();
-    if (temporal && !haveDepth)
+    const bool stabilize = Config::Instance()->DlssNrSuperiorResidualDlss.value_or_default();
+    if (temporal && stabilize && !haveDepth)
     {
         GiveUp("temporal stabilization needs the game's depth and motion guides", false);
         return Began::Unavailable;
@@ -525,8 +545,9 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
         if (ngxGone || previous->device.Get() != device || previous->width != width || previous->height != height ||
             previous->workWidth != workWidth || previous->workHeight != workHeight || previous->format != format ||
             previous->inverted != frame.DepthInverted || previous->beforeSr != frame.BeforeUpscale ||
-            previous->temporal != temporal || previous->packed != (layout != nullptr) ||
-            (layout && previous->layout != *layout) || previous->preset != preset)
+            previous->temporal != temporal || previous->stabilize != stabilize ||
+            previous->packed != (layout != nullptr) || (layout && previous->layout != *layout) ||
+            previous->preset != preset)
         {
             Drop();
             g_nr.reset = true;
@@ -545,13 +566,19 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
         g.inverted = frame.DepthInverted;
         g.beforeSr = frame.BeforeUpscale;
         g.temporal = temporal;
+        g.stabilize = stabilize;
         g.packed = layout != nullptr;
         if (layout)
             g.layout = *layout;
         g.preset = preset;
     }
     auto& g = *state.current;
-    if (temporal && !g.feature)
+    if (temporal && !stabilize && g.packed && !g.warp.Get() && !CreateWarp(g, shader, cmd))
+    {
+        GiveUp("its packed warp metadata could not be created", false);
+        return Began::Unavailable;
+    }
+    if (temporal && stabilize && !g.feature)
     {
         switch (CreateTemporal(g, shader, cmd))
         {
@@ -570,7 +597,7 @@ Began Begin(DlssNr_Dx12& shader, ID3D12GraphicsCommandList* cmd, ID3D12Device* d
     }
     // A later call is not proof the creation was submitted (some engines record more than one upscale per list):
     // the submission epoch must have moved on, as for the NR feature itself.
-    if (temporal && g.waitedFrames != UINT_MAX)
+    if (temporal && stabilize && g.waitedFrames != UINT_MAX)
     {
         if (frame.SubmissionEpoch == g.createEpoch)
         {
