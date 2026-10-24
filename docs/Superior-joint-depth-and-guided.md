@@ -121,8 +121,55 @@ ordinary 25/50/65% and Balanced Compress 65/100%, with affine, single-edge and d
 Thirty configurations use eight alternating ABBA/BAAB blocks, eight warmup and forty measured
 quartets per block, four repetitions per timestamp and 640 samples per variant/configuration.
 
-**Controlled performance results are pending.** Idle validation after initial timing attempts
-observed 29–32% GPU activity with the test processes stopped. Those attempts must not be used to
-claim clean GPU performance. Repeat the timestamp harness after external load has stopped and
-save the raw CSV, paired statistics, GPU identity and observed utilization. The experimental
-checkbox remains off by default, retaining the old path.
+The final controlled repeat began after three idle checks of **2%, 2%, 3%** GPU utilization;
+a settled post-run sample was **2%**. GPU: RTX 4090 / driver 616.56. All samples and paired-block
+statistics are retained. Initial attempts with an observed unrelated 29–32% load are excluded
+from the published results; this table and raw data contain only the final repeat.
+
+| Configuration | Baseline median ms | Joint median ms | Paired delta ms | Paired stddev ms |
+| --- | ---: | ---: | ---: | ---: |
+| packed-affine-depth1080, 65% | 0.100608 | 0.117248 | +0.016640 | 0.028931 |
+| packed-affine-depth1080, 100% | 0.283392 | 0.315648 | +0.032448 | 0.030187 |
+| packed-affine-depth2160, 65% | 0.114944 | 0.209408 | +0.094272 | 0.022924 |
+| packed-affine-depth2160, 100% | 0.297216 | 0.338944 | +0.042112 | 0.036929 |
+| packed-edge-depth1080, 65% | 0.077312 | 0.092416 | +0.014912 | 0.020393 |
+| packed-edge-depth1080, 100% | 0.221696 | 0.239872 | +0.018688 | 0.030157 |
+| packed-edge-depth2160, 65% | 0.085504 | 0.179456 | +0.093696 | 0.059860 |
+| packed-edge-depth2160, 100% | 0.224512 | 0.264704 | +0.039808 | 0.036946 |
+| packed-islands-depth1080, 65% | 0.103680 | 0.124672 | +0.020864 | 0.036176 |
+| packed-islands-depth1080, 100% | 0.276096 | 0.307200 | +0.032000 | 0.031323 |
+| packed-islands-depth2160, 65% | 0.120832 | 0.263168 | +0.142784 | 0.055350 |
+| packed-islands-depth2160, 100% | 0.292096 | 0.356608 | +0.064064 | 0.034492 |
+| uniform-affine-depth1080, 25% | 0.034048 | 0.054016 | +0.020224 | 0.027357 |
+| uniform-affine-depth1080, 50% | 0.059904 | 0.066048 | +0.006272 | 0.016599 |
+| uniform-affine-depth1080, 65% | 0.116736 | 0.125696 | +0.009472 | 0.032142 |
+| uniform-affine-depth2160, 25% | 0.041216 | 0.065792 | +0.024576 | 0.036684 |
+| uniform-affine-depth2160, 50% | 0.068864 | 0.119552 | +0.050688 | 0.048225 |
+| uniform-affine-depth2160, 65% | 0.128256 | 0.230144 | +0.102528 | 0.059159 |
+| uniform-edge-depth1080, 25% | 0.017920 | 0.024064 | +0.006528 | 0.017072 |
+| uniform-edge-depth1080, 50% | 0.042496 | 0.045568 | +0.003200 | 0.040277 |
+| uniform-edge-depth1080, 65% | 0.080000 | 0.085760 | +0.006016 | 0.021613 |
+| uniform-edge-depth2160, 25% | 0.019200 | 0.059136 | +0.039680 | 0.050215 |
+| uniform-edge-depth2160, 50% | 0.046592 | 0.093696 | +0.046464 | 0.045180 |
+| uniform-edge-depth2160, 65% | 0.088576 | 0.183552 | +0.094336 | 0.081745 |
+| uniform-islands-depth1080, 25% | 0.048128 | 0.076032 | +0.027520 | 0.024159 |
+| uniform-islands-depth1080, 50% | 0.058112 | 0.064000 | +0.006016 | 0.034043 |
+| uniform-islands-depth1080, 65% | 0.107264 | 0.117504 | +0.009984 | 0.025472 |
+| uniform-islands-depth2160, 25% | 0.031488 | 0.071936 | +0.041600 | 0.060057 |
+| uniform-islands-depth2160, 50% | 0.061696 | 0.109056 | +0.047360 | 0.025728 |
+| uniform-islands-depth2160, 65% | 0.118016 | 0.297472 | +0.178944 | 0.100632 |
+
+With 1080p source depth, ordinary 65% costs +0.006016..0.009984 ms and 100% + Balanced costs
++0.018688..0.032448 ms in these fixtures. With 4K source depth, ordinary 65% costs
++0.094336..0.178944 ms, and 100% + Balanced costs +0.039808..0.064064 ms. Some small differences
+are below per-pair variability; they must not be presented as exact whole-game costs. Source
+**depth** resolution matters independently of motion and NR color resolution.
+
+The experimental checkbox is off by default, retaining the previous path. The quality gain is
+not free: compare real game motion and thin silhouettes before choosing it. These timestamps
+exclude proprietary NR/private DLSS inference and do not establish a whole-frame FPS change.
+The source DLL was built from `974ed30e`; this report adds no rendering-code change.
+
+[Raw timestamps](validation/superior-joint-depth-timing.csv),
+[medians, variability and per-block deltas](validation/superior-joint-depth-timing.json), and
+[GPU quality output](validation/superior-joint-depth-quality.txt).
