@@ -23,7 +23,10 @@ float MotionDepthTolerance(float a, float b)
     // Device depth stays device depth. The comparison is invariant under reversed Z.
     return max(1e-6, max(abs(a), abs(b)) * 3.814697265625e-6);
 }
-float2 SuperiorSurfaceMotion(float2 nativePixel, int2 nearestPixel, int2 queryDepthPixel, float queryDepth)
+#ifndef DLSSNR_DEPTH_QUERY_TYPE
+#define DLSSNR_DEPTH_QUERY_TYPE int2
+#endif
+float2 SuperiorSurfaceMotion(float2 nativePixel, int2 nearestPixel, DLSSNR_DEPTH_QUERY_TYPE queryDepthPixel, float queryDepth)
 {
     const int2 lo = int2(gMotionRect.xy), hi = int2(gMotionRect.xy + gMotionRect.zw) - 1;
     int2 p[5];

@@ -30,7 +30,9 @@ param(
     [switch]$GpuMotionTiming,
     [switch]$GpuSurfaceMotion,
     [switch]$GpuSurfaceMotionTiming,
-    [switch]$GpuMinifiedMotionTiming
+    [switch]$GpuMinifiedMotionTiming,
+    [switch]$GpuJointDepth,
+    [switch]$GpuJointDepthTiming
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -41,6 +43,7 @@ try {
     if ($GpuDiagnosticsTiming) { $GpuDiagnostics = $true }
     if ($GpuMotionTiming) { $GpuMotion = $true }
     if ($GpuSurfaceMotionTiming) { $GpuSurfaceMotion = $true }
+    if ($GpuJointDepthTiming) { $GpuJointDepth = $true }
     if ($GpuMinifiedMotionTiming) {
         if (!$python) { throw '-GpuMinifiedMotionTiming needs Python to save the baseline shaders' }
         & python tools/prepare_minified_motion_baseline.py
@@ -121,6 +124,8 @@ try {
     if ($GpuSurfaceMotion) { $names += @('surface_motion_quality', 'minified_motion_quality') }
     if ($GpuSurfaceMotionTiming) { $names += 'surface_motion_timing' }
     if ($GpuMinifiedMotionTiming) { $names += 'minified_motion_timing' }
+    if ($GpuJointDepth) { $names += @('joint_depth_quality','tunable_guided_quality') }
+    if ($GpuJointDepthTiming) { $names += 'joint_depth_timing' }
     if ($GpuCandidates -or $GpuCandidateTiming) {
         $names += @('four_candidates_quality', 'fused_pack_experiment')
         if ($GpuCandidateTiming) { $names += 'four_candidates_timing' }
@@ -219,6 +224,16 @@ try {
     if ($GpuHostOptTiming) {
         & "$out/host_opt_timing.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Host optimization GPU timing failed' }
+    }
+    if ($GpuJointDepth) {
+        & "$out/joint_depth_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Joint depth/MV quality failed' }
+        & "$out/tunable_guided_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Tunable guided quality failed' }
+    }
+    if ($GpuJointDepthTiming) {
+        & "$out/joint_depth_timing.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Joint depth/MV timing failed' }
     }
     $candidate = 'OptiScaler/shaders/dlssnr/superior/precompile'
     if ($GpuQuality) {

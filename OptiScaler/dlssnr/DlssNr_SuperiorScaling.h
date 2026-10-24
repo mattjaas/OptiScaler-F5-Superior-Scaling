@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include "DlssNr_GuidedShaping.h"
 #include "DlssNr_InterPassSchedule.h"
@@ -23,7 +24,24 @@ constexpr uint32_t ShaderFlag = 65536u;
 constexpr uint32_t LowGroupHeight = 16u;
 inline bool Enabled(uint32_t transfer) { return transfer == Transfer; }
 template <class C> inline bool Enabled(const C& cfg) { return Enabled(cfg.DlssNrTransfer.value_or_default()); }
-inline unsigned Preset(unsigned preset) { return preset == 11u ? 11u : 1u; } // K or A; no default/latest ambiguity.
+inline unsigned Preset(unsigned preset) { return preset == 4u || preset == 5u || preset == 11u ? preset : 1u; }
+inline float GuidedRange(float value) { return std::isfinite(value) ? std::clamp(value, .00001f, 1.f) : .015f; }
+inline float GuidedSpatial(float value) { return std::isfinite(value) ? std::clamp(value, .0001f, 64.f) : 3.f; }
+inline bool CustomGuided(float range, float spatial)
+{
+    return GuidedRange(range) != .015f || GuidedSpatial(spatial) != 3.f;
+}
+// Resolve-only reuse of meter dimensions, absent from Superior's composition path.
+// Separate tunable PSOs read the IEEE754 bits; defaults keep their original constant-folded PSOs.
+template <class P> inline void SetGuided(P& p, float range, float spatial)
+{
+    range = GuidedRange(range);
+    spatial = GuidedSpatial(spatial);
+    range = 1.f / (range * range);
+    spatial = 1.f / (spatial * spatial);
+    std::memcpy(&p.ExposureSourceWidth, &range, sizeof(range));
+    std::memcpy(&p.ExposureSourceHeight, &spatial, sizeof(spatial));
+}
 // -1 keeps the generic PSO. Specialization changes no user setting or colour calculation.
 inline int NormalResolveVariant(bool rawAnswer, bool packed, unsigned passthrough, unsigned mapping, unsigned debugView,
                                 unsigned compareMode, unsigned applyModel)
@@ -39,7 +57,7 @@ inline int NormalResolveVariant(bool rawAnswer, bool packed, unsigned passthroug
     return variant < 0 ? -1 : variant + (packed ? 5 : 0);
 }
 // 310.8 has only Main. On 310.9, only A (1) selects Main; Default (0), B (2)
-// and the legacy saved value 3 select Small. This is independent of SR's A/K.
+// and the legacy saved value 3 select Small. This is independent of SR's A/D/E/K.
 inline bool MainOnlyRuntime(unsigned major, unsigned minor) { return major == 310u && minor < 9u; }
 inline unsigned EffectiveNrPreset(unsigned requested, bool mainOnly) { return mainOnly || requested == 1u ? 1u : 2u; }
 // Calibrated IDs: styles Standard/Natural/Cinematic; presets Default/A/B and legacy Small alias 3.

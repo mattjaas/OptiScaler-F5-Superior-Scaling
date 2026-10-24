@@ -160,8 +160,23 @@ int main() {
                 1274.f / 1440.f); // missing declared reference uses valid source, not allocation/depth
         require(MotionScale(1920, 2496, 0, 1920) == 2496);
         require(MotionScale(1,1274,0)==1); // unspecified game reference
-        for(unsigned i=0;i<30;++i)require(Preset(i)==(i==11u?11u:1u));
+        for (unsigned i = 0; i < 30; ++i)
+            require(Preset(i) == (i == 4u || i == 5u || i == 11u ? i : 1u));
         require(Preset(UINT32_MAX)==1u);
+        require(!CustomGuided(.015f, 3.f) && CustomGuided(.02f, 3.f) && CustomGuided(.015f, 2.f));
+        require(GuidedRange(NAN) == .015f && GuidedSpatial(INFINITY) == 3.f);
+        require(GuidedRange(0) == .00001f && GuidedSpatial(-2) == .0001f);
+        require(GuidedRange(2) == 1.f && GuidedSpatial(100) == 64.f);
+        struct TunableFields
+        {
+            uint32_t ExposureSourceWidth = 0, ExposureSourceHeight = 0;
+        } tunable;
+        SetGuided(tunable, .02f, 1.5f);
+        float range, spatial;
+        std::memcpy(&range, &tunable.ExposureSourceWidth, 4);
+        std::memcpy(&spatial, &tunable.ExposureSourceHeight, 4);
+        require(range == 1.f / (.02f * .02f) && spatial == 1.f / (1.5f * 1.5f));
+
         // Native-scale fallback is tested by the host integration contract.
         DlssNrConstants input{};input.Mode=0;input.Width=1920;input.Height=1080;input.DirectResolveFlags=ShaderFlag;
         for(uint32_t pass : {0u,1u})for(uint32_t mode=0;mode<5;++mode) {
@@ -265,6 +280,6 @@ int main() {
             require(!Enabled(cfg));
         }
         std::cout << "Superior policy PASS: Main/Small/Default/legacy presets on 310.8 and 310.9, mixed gain blocks "
-                     "and schedules, fixed settings, A/K, guides and PSO guards\n";
+                     "and schedules, fixed settings, A/D/E/K, tunable guided, guides and PSO guards\n";
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

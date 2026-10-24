@@ -45,7 +45,7 @@ retains carrier encode/decode, as in the preceding experimental DLL.
 The only calibration change is **Natural, NR Small/Preset B high/medium: 0.925 -> 0.900**.
 Low remains **0.838**. NR Default and legacy Small selections use the Small table on 310.9
 and newer supported runtimes; the 310.8 Main-only runtime retains the Main table. Main/A,
-other styles and unknown-preset/style fallback values remain unchanged. Private SR A/K
+other styles and unknown-preset/style fallback values remain unchanged. Private SR A/D/E/K
 selection does not select the NR gain table. Existing resolution, Structure and Intensity
 scaling applies to the new value, including automatic correction scheduling.
 

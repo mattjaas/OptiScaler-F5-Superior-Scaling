@@ -256,6 +256,16 @@ namespace DlssNr::Superior::HostBytecode
 #include "precompile/host_skip_guided_sdr_Shader.h"
 #include "precompile/host_skip_guided_packed_hdr_Shader.h"
 #include "precompile/host_skip_guided_packed_sdr_Shader.h"
+#include "precompile/host_tunable_hdr_Shader.h"
+#include "precompile/host_tunable_sdr_Shader.h"
+#include "precompile/host_tunable_packed_hdr_Shader.h"
+#include "precompile/host_tunable_packed_sdr_Shader.h"
+#include "precompile/host_tunable_cached_packed_hdr_Shader.h"
+#include "precompile/host_tunable_cached_packed_sdr_Shader.h"
+#include "precompile/host_tunable_native_packed_hdr_Shader.h"
+#include "precompile/host_tunable_native_packed_sdr_Shader.h"
+#include "precompile/host_tunable_native_cached_packed_hdr_Shader.h"
+#include "precompile/host_tunable_native_cached_packed_sdr_Shader.h"
 } // namespace DlssNr::Superior::HostBytecode
 
 ID3D12PipelineState* DlssNr_Dx12::SuperiorResolvePipeline(const DlssNrConstants& params, bool rawAnswer, bool packed,
@@ -286,6 +296,41 @@ ID3D12PipelineState* DlssNr_Dx12::SuperiorResolvePipeline(const DlssNrConstants&
         }
         // A failed diagnostic must not silently execute the stage the user asked to skip.
         return _superiorSkipGuided[i];
+    }
+    const auto& config = *Config::Instance();
+    if (!rawAnswer && DlssNr::SuperiorScaling::CustomGuided(config.DlssNrSuperiorGuidedRangeSigma.value_or_default(),
+                                                            config.DlssNrSuperiorGuidedSpatialSigma.value_or_default()))
+    {
+        const bool native =
+            packed && params.ModelWorkScale == 1.f && DlssNr::SuperiorScaling::Diagnostics::NativeCenter(diagnostics);
+        const unsigned base = !packed ? 0u : native ? (cachedWarp ? 8u : 6u) : (cachedWarp ? 4u : 2u);
+        const unsigned index = base + (params.Passthrough ? 1u : 0u);
+        if (!_superiorTunableResolveAttempted[index])
+        {
+            _superiorTunableResolveAttempted[index] = true;
+            const void* blobs[] { host_tunable_hdr_cso,
+                                  host_tunable_sdr_cso,
+                                  host_tunable_packed_hdr_cso,
+                                  host_tunable_packed_sdr_cso,
+                                  host_tunable_cached_packed_hdr_cso,
+                                  host_tunable_cached_packed_sdr_cso,
+                                  host_tunable_native_packed_hdr_cso,
+                                  host_tunable_native_packed_sdr_cso,
+                                  host_tunable_native_cached_packed_hdr_cso,
+                                  host_tunable_native_cached_packed_sdr_cso };
+            const size_t sizes[] { sizeof(host_tunable_hdr_cso),
+                                   sizeof(host_tunable_sdr_cso),
+                                   sizeof(host_tunable_packed_hdr_cso),
+                                   sizeof(host_tunable_packed_sdr_cso),
+                                   sizeof(host_tunable_cached_packed_hdr_cso),
+                                   sizeof(host_tunable_cached_packed_sdr_cso),
+                                   sizeof(host_tunable_native_packed_hdr_cso),
+                                   sizeof(host_tunable_native_packed_sdr_cso),
+                                   sizeof(host_tunable_native_cached_packed_hdr_cso),
+                                   sizeof(host_tunable_native_cached_packed_sdr_cso) };
+            CreateComputePipeline(_device, &_superiorTunableResolve[index], blobs[index], sizes[index], nullptr);
+        }
+        return _superiorTunableResolve[index];
     }
     int normal =
         DlssNr::SuperiorScaling::NormalResolveVariant(rawAnswer, packed, params.Passthrough, params.ReversibleMode,

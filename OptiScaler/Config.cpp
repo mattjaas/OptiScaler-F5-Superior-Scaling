@@ -495,6 +495,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrMaxRatio.set_from_config(readFloat("DlssNr", "MaxRatio"));
             DlssNrTransfer.set_from_config(readUInt("DlssNr", "Transfer"));
             DlssNrSuperiorScalingPreset.set_from_config(readUInt("DlssNr", "SuperiorScalingPreset"));
+            DlssNrSuperiorGuidedRangeSigma.set_from_config(readFloat("DlssNr", "SuperiorGuidedRangeSigma"));
+            DlssNrSuperiorGuidedSpatialSigma.set_from_config(readFloat("DlssNr", "SuperiorGuidedSpatialSigma"));
+            DlssNrSuperiorReconstructDepth.set_from_config(readBool("DlssNr", "SuperiorReconstructDepth"));
             DlssNrSuperiorResidualDlss.set_from_config(readBool("DlssNr", "SuperiorResidualDlss"));
             DlssNrSuperiorSkipMvUnits.set_from_config(readBool("DlssNr", "SuperiorSkipMvUnits"));
             DlssNrSuperiorSkipInterPass.set_from_config(readBool("DlssNr", "SuperiorSkipInterPass"));
@@ -1655,6 +1658,12 @@ bool Config::SaveIni()
     ini.SetValue("DlssNr", "Transfer", GetIntValue(Instance()->DlssNrTransfer.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorScalingPreset",
                  GetIntValue(Instance()->DlssNrSuperiorScalingPreset.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorGuidedRangeSigma",
+                 GetFloatValue(Instance()->DlssNrSuperiorGuidedRangeSigma.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorGuidedSpatialSigma",
+                 GetFloatValue(Instance()->DlssNrSuperiorGuidedSpatialSigma.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorReconstructDepth",
+                 GetBoolValue(Instance()->DlssNrSuperiorReconstructDepth.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorResidualDlss",
                  GetBoolValue(Instance()->DlssNrSuperiorResidualDlss.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorSkipMvUnits",

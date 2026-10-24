@@ -60,7 +60,7 @@ path cannot run -- no depth/motion guides, NVIDIA DLSS SR through NGX unavailabl
 NR port, missing nvngx_dlss), its surfaces cannot be created, or the private DLSS creation is never submitted within
 240 frames -- Superior gives up for the session with one warning in the log, skips that one frame, and the ordinary path
 runs with **Matched residual** from the next frame. The menu says why; selecting Superior again retries. When NGX itself
-was unavailable (or on Vulkan) the Superior entry is greyed out. If the requested private DLSS preset (A or K) cannot be
+was unavailable (or on Vulkan) the Superior entry is greyed out. If the requested private DLSS preset (A, D, E or K) cannot be
 created by the installed runtime, it is created once more with the runtime's default preset (logged once).
 
 Every non-Superior resolve while Superior is selected (100% without compression, supersampling, or after giving up)
@@ -138,7 +138,7 @@ At or below 100% with active compression, the sequence is:
 | --- | --- | --- |
 | Original Compress colour/depth/motion pack | 2240x1264 | 3456x1952 |
 | NR and inter-passes | 2240x1264 | 3456x1952 |
-| Private DLSS residual stabilization (DLAA A/K) | 2240x1264 | 3456x1952 |
+| Private DLSS residual stabilization (DLAA A/D/E/K) | 2240x1264 | 3456x1952 |
 | Low64 frequency field | Packed grid / 8, rounded up | Packed grid / 8, rounded up |
 | Guided unwarp + native composition, one dispatch | 3840x2160 | 3840x2160 |
 
@@ -204,7 +204,7 @@ visual parity. Raw samples are summarised in [validation/README.md](validation/R
 ### Superior isolation, residual flags and lossless host optimization
 
 The model-resolution tooltip now explains that a few percentage points higher or lower can give a better match to native NR.
-The residual DLSS feature explicitly requests **IsHDR + AutoExposure + MVLowRes** with unit exposure and A/K DLAA; these
+The residual DLSS feature explicitly requests **IsHDR + AutoExposure + MVLowRes** with unit exposure and A/D/E/K DLAA; these
 flags are independent of the game's exposure settings and are passed to the private parameter object through the direct
 NGX proxy entry point. No game/NR exposure flags or options are changed.
 

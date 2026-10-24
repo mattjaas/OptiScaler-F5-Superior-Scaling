@@ -115,6 +115,16 @@ try {
     Build (Join-Path $shaders "superior/MinifiedMotion.hlsl") "SuperiorMinifiedGuidesMain" @() "host_minified_surface_guides"
     Build (Join-Path $shaders "superior/MinifiedMotion.hlsl") "SuperiorUniformMinifiedGuidesMain" @() "host_uniform_minified_surface_guides"
 
+    foreach ($packed in @($true,$false)) {
+        foreach ($minified in @($false,$true)) {
+            $defines=@()
+            if ($minified) { $defines+=@('-D','DLSSNR_JOINT_MINIFY=1') }
+            $entry=if ($packed) { $(if ($minified) { 'SuperiorJointMinifiedGuidesMain' } else { 'SuperiorJointGuidesMain' }) } else { $(if ($minified) { 'SuperiorUniformJointMinifiedGuidesMain' } else { 'SuperiorUniformJointGuidesMain' }) }
+            $stem='host_'+$(if (!$packed) {'uniform_'})+'joint_'+$(if ($minified) {'minified_'})+'guides'
+            Build (Join-Path $shaders 'superior/JointGuides.hlsl') $entry $defines $stem
+        }
+    }
+
     # The host resolve preserves janblade's exposure and composition and substitutes only the residual estimator.
     # raw: the non-temporal resolve; its SDR and HDR builds are identical bytecode, so there is one blob for both.
     $live = Join-Path $shaders "precompile/dlssnr.hlsl"
@@ -146,6 +156,15 @@ try {
         }
         if ($cached) { $defines += @('-D', 'DLSSNR_SUPERIOR_HOST_CACHED=1') }
         Build $live "CSMain" $defines $stem
+    }
+    foreach ($variant in @('hdr','sdr','packed_hdr','packed_sdr','cached_packed_hdr','cached_packed_sdr',
+                           'native_packed_hdr','native_packed_sdr','native_cached_packed_hdr','native_cached_packed_sdr')) {
+        $defines=@('-D','DLSSNR_SUPERIOR_HOST_RESOLVE=1','-D','DLSSNR_SUPERIOR_TUNABLE_GUIDED=1')
+        if ($variant.EndsWith('sdr')) { $defines+=@('-D','DLSSNR_SUPERIOR_HOST_SDR=1') }
+        if ($variant.Contains('packed_')) { $defines+=@('-D','DLSSNR_SUPERIOR_HOST_PACKED=1') }
+        if ($variant.Contains('cached_')) { $defines+=@('-D','DLSSNR_SUPERIOR_HOST_CACHED=1') }
+        if ($variant.StartsWith('native_')) { $defines+=@('-D','DLSSNR_SUPERIOR_NATIVE_CENTER=1') }
+        Build $live 'CSMain' $defines "host_tunable_$variant"
     }
     Build (Join-Path $shaders "superior/WarpCache.hlsl") "CSMain" @() "host_warp_cache"
 

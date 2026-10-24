@@ -301,6 +301,7 @@ struct alignas(256) DlssNrConstants
     // in-shader path for automatic exposure, which reads its own 1x1 texture; game exposure keeps
     // signalling through UseGameExposure. Left zero, none of it applies and the CPU white point is used.
     float PreExposure;
+    // Superior tunable resolve only: these otherwise-unused meter fields carry inverse-variance float bits.
     uint32_t ExposureSourceWidth;
     uint32_t ExposureSourceHeight;
     uint32_t MeterCopiesExposure; // meter mode: 1 courier the game's exposure, 0 average every tile pixel

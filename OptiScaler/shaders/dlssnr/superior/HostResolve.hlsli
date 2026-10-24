@@ -106,10 +106,16 @@ float3 SuperiorGuidedEdit(float2 uvq, float3 nativeGuide)
 #if defined(DLSSNR_SUPERIOR_SKIP_GUIDED)
     return SuperiorShapeEdit(fallback, uvq);
 #endif
+#if defined(DLSSNR_SUPERIOR_TUNABLE_GUIDED)
+    // Meter-size fields are unused in resolve. CPU supplies sanitized inverse variances.
+    const float invRange2 = asfloat(gExposureSourceWidth);
+    const float invSpatial2 = asfloat(gExposureSourceHeight);
+#else
     const float rangeSigma = max(abs(0.015), 1e-5);
     const float spatialSigma = max(abs(3.0), 1e-4);
     const float invRange2 = 1.0 / (rangeSigma * rangeSigma);
     const float invSpatial2 = 1.0 / (spatialSigma * spatialSigma);
+#endif
     const float gaussianExp2 = 0.7213475204444817;
     const float2 sourcePos = uvq * float2(srcW, srcH) - 0.5;
     const int2 base = int2(floor(sourcePos + 0.5));

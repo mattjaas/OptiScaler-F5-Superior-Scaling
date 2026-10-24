@@ -83,6 +83,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     bool _superiorResolveAttempted[6] {};
     ID3D12PipelineState* _superiorNormalResolve[15] {};
     bool _superiorNormalResolveAttempted[15] {};
+    ID3D12PipelineState* _superiorTunableResolve[10] {};
+    bool _superiorTunableResolveAttempted[10] {};
     ID3D12PipelineState* _superiorNativeResolve[7] {};
     bool _superiorNativeResolveAttempted[7] {};
     ID3D12PipelineState* _superiorSkipGuided[4] {};
@@ -133,8 +135,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // pipelines of one shader, built on first use the same way. Not retried once they failed to build.
     ID3D12PipelineState* _spatialPipelineState = nullptr;
     ID3D12PipelineState* _spatialGuidesPipelineState = nullptr;
-    ID3D12PipelineState* _superiorSpatialGuides[6] = {};
-    bool _superiorSpatialGuidesAttempted[6] = {};
+    ID3D12PipelineState* _superiorSpatialGuides[10] = {};
+    bool _superiorSpatialGuidesAttempted[10] = {};
     bool _spatialPipelineFailed = false;
 
     // The LUT pass (dlssnr_lut.hlsl, LUT-apply epic Story 2: dlssnr-lut-apply).

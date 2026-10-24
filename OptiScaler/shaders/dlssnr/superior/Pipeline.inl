@@ -379,6 +379,9 @@ Created CreateTemporal(Generation& g, DlssNr_Dx12& shader, ID3D12GraphicsCommand
     return result == NVSDK_NGX_Result_Success && g.feature ? Created::Ok : Created::SrUnavailable;
 }
 
+static_assert(unsigned(NVSDK_NGX_DLSS_Hint_Render_Preset_D) == 4u &&
+              unsigned(NVSDK_NGX_DLSS_Hint_Render_Preset_E) == 5u);
+
 Constants Shaping(const Config& cfg, unsigned first, unsigned completed,
                   DlssNr::SuperiorScaling::FrequencyScales scales)
 {

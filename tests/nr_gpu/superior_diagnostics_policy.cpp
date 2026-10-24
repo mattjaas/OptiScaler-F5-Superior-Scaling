@@ -10,7 +10,7 @@ struct Settings
 {
     Setting DlssNrSuperiorSkipMvUnits, DlssNrSuperiorSkipInterPass, DlssNrSuperiorSkipCarrier, DlssNrSuperiorSkipGuided,
         DlssNrSuperiorSkipFinalShaping, DlssNrSuperiorSkipCompressionLow, DlssNrSuperiorSkipWarpCache,
-        DlssNrSuperiorFullGuided;
+        DlssNrSuperiorFullGuided, DlssNrSuperiorReconstructDepth;
     struct Method
     {
         unsigned value = 2;
@@ -34,7 +34,7 @@ int main()
             require(D::LoadMotionMethod(method, true) == method && D::LoadMotionMethod(method, false) == method);
         require(!D::LoadMotionMethod(UINT32_MAX, {}));
         require(D::LoadMotionMethod(UINT32_MAX, true) == 0u);
-        for (unsigned bits = 0; bits < 256; ++bits)
+        for (unsigned bits = 0; bits < 512; ++bits)
             for (unsigned method = 0; method < 3; ++method)
             {
                 Settings s;
@@ -42,11 +42,16 @@ int main()
                 Setting* fields[] { &s.DlssNrSuperiorSkipMvUnits,      &s.DlssNrSuperiorSkipInterPass,
                                     &s.DlssNrSuperiorSkipCarrier,      &s.DlssNrSuperiorSkipGuided,
                                     &s.DlssNrSuperiorSkipFinalShaping, &s.DlssNrSuperiorSkipCompressionLow,
-                                    &s.DlssNrSuperiorSkipWarpCache,    &s.DlssNrSuperiorFullGuided };
-                for (unsigned i = 0; i < 8; ++i)
+                                    &s.DlssNrSuperiorSkipWarpCache,    &s.DlssNrSuperiorFullGuided,
+                                    &s.DlssNrSuperiorReconstructDepth };
+                for (unsigned i = 0; i < 9; ++i)
                     fields[i]->value = (bits & (1u << i)) != 0;
                 const auto mask = D::Mask(s);
-                require(mask == (bits | (method == 0 ? 256u : method == 2 ? 512u : 0u)));
+                require(mask == ((bits & 255u) |
+                                 (method == 0   ? 256u
+                                  : method == 2 ? 512u
+                                                : 0u) |
+                                 (method == 2 && (bits & 256u) ? 1024u : 0u)));
                 require(D::MotionMethod(s) == method && D::MotionMethodFromMask(mask) == method);
                 require(!D::PrivateDlss(false, mask));
                 require(D::PrivateDlss(true, mask) == !(bits & 4u));
@@ -61,7 +66,7 @@ int main()
         Settings invalid;
         invalid.DlssNrSuperiorMotionMethod.value = UINT32_MAX;
         require(D::MotionMethod(invalid) == 2u);
-        std::cout << "Superior stage bypass policy PASS: all 768 combinations; carrier/DLSS dependency, independent "
+        std::cout << "Superior stage bypass policy PASS: all 1536 combinations; carrier/DLSS dependency, independent "
                      "gains and warp modes\n";
     }
     catch (const std::exception& e)

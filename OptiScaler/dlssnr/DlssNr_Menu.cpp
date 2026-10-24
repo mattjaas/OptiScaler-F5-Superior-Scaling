@@ -3464,15 +3464,22 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                        "guided reconstruction runs only near/in compressed regions; the center keeps NR without "
                        "the guided filter. Disabling DLSS may increase flicker or instability in motion.");
             ImGui::BeginDisabled(!residualDlss);
-            static const char* presets[] = { "A - higher performance", "K - slower, more stable NR in motion" };
-            int preset =
-                DlssNr::SuperiorScaling::Preset(config->DlssNrSuperiorScalingPreset.value_or_default()) == 11 ? 1 : 0;
-
+            static const char* presets[] = { "A - higher performance", "D", "E",
+                                             "K - slower, more stable NR in motion" };
+            static constexpr unsigned presetValues[] { 1u, 4u, 5u, 11u };
+            const auto selectedPreset =
+                DlssNr::SuperiorScaling::Preset(config->DlssNrSuperiorScalingPreset.value_or_default());
+            int preset = 0;
+            for (int i = 0; i < IM_ARRAYSIZE(presetValues); ++i)
+                if (presetValues[i] == selectedPreset)
+                    preset = i;
             if (ImGui::Combo("DLSS to temporally stabilize NR", &preset, presets, IM_ARRAYSIZE(presets)))
-                config->DlssNrSuperiorScalingPreset = preset == 1 ? 11u : 1u;
+                config->DlssNrSuperiorScalingPreset = presetValues[preset];
 
-            HelpMarker("Superior Scaling: a private DLSS in DLAA mode, applied to NR's change at its working "
-                       "resolution. Independent of the NR model preset and the game's own DLSS preset.");
+            HelpMarker(
+                "Superior Scaling: a private DLSS in DLAA mode, applied to NR's change at its working "
+                "resolution. Independent of the NR model preset and the game's own DLSS preset. "
+                "A/D/E availability depends on the DLSS runtime; an unsupported preset can fall back to its default.");
             ImGui::EndDisabled();
 
             static const char* motionMethods[] = { "Point sampled", "Bilinear + motion guard",
@@ -3489,6 +3496,37 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                        "limited motion slopes to avoid mixing layers. No resampling is added at native 100% without "
                        "Compress. Method changes reset history. These are experimental comparisons, not a guarantee "
                        "of improved game motion. MV unit conversion is a separate diagnostic switch.");
+
+            ImGui::BeginDisabled(motionMethod != 2);
+            bool jointDepth = config->DlssNrSuperiorReconstructDepth.value_or_default();
+            if (ImGui::Checkbox("Reconstruct depth and motion together (experimental)", &jointDepth))
+                config->DlssNrSuperiorReconstructDepth = jointDepth;
+            ImGui::EndDisabled();
+            HelpMarker("Depth-aware mode only. Reconstructs depth on continuous surfaces and selects matching depth/MV "
+                       "from the source footprint when reducing resolution. May change thin silhouettes. Disable to "
+                       "compare with point-sampled depth. No resampling at native 100% without Compress.");
+            if (ImGui::TreeNode("Guided reconstruction (experimental)"))
+            {
+                float range =
+                    DlssNr::SuperiorScaling::GuidedRange(config->DlssNrSuperiorGuidedRangeSigma.value_or_default());
+                float spatial =
+                    DlssNr::SuperiorScaling::GuidedSpatial(config->DlssNrSuperiorGuidedSpatialSigma.value_or_default());
+                if (ImGui::SliderFloat("Range sigma", &range, .001f, .1f, "%.5f", ImGuiSliderFlags_Logarithmic))
+                    config->DlssNrSuperiorGuidedRangeSigma = DlssNr::SuperiorScaling::GuidedRange(range);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reset##SuperiorRange"))
+                    config->DlssNrSuperiorGuidedRangeSigma = .015f;
+                HelpMarker("Default 0.015. Colour similarity tolerance for final guided residual reconstruction. "
+                           "Ctrl+click to type a value. Inter-pass filtering is unchanged.");
+                if (ImGui::SliderFloat("Spatial sigma", &spatial, .1f, 10.f, "%.3f", ImGuiSliderFlags_Logarithmic))
+                    config->DlssNrSuperiorGuidedSpatialSigma = DlssNr::SuperiorScaling::GuidedSpatial(spatial);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reset##SuperiorSpatial"))
+                    config->DlssNrSuperiorGuidedSpatialSigma = 3.f;
+                HelpMarker("Default 3.0. Spatial falloff within the existing radius-one filter. "
+                           "Ctrl+click to type a value. The number of taps stays unchanged.");
+                ImGui::TreePop();
+            }
 
             if (ImGui::TreeNode("Superior stage bypasses (diagnostic)"))
             {

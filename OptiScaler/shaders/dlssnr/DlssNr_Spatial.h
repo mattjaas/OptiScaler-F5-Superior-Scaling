@@ -438,6 +438,13 @@ inline bool NeedsMinifiedMotion(const Constants& c)
     return c.motionRect[2] > w.nativeWidth * minX * 1.0001f || c.motionRect[3] > w.nativeHeight * minY * 1.0001f;
 }
 
+inline bool NeedsJointMinification(Constants c)
+{
+    c.motionRect[2] = std::max(c.motionRect[2], c.depthRect[2]);
+    c.motionRect[3] = std::max(c.motionRect[3], c.depthRect[3]);
+    return NeedsMinifiedMotion(c);
+}
+
 struct MinifiedMotionDispatch
 {
     uint32_t groupsX = 0, groupsY = 0, pixels = 0;
@@ -528,6 +535,17 @@ inline MinifiedMotionDispatch PrepareMinifiedMotion(Constants& c)
     c.padding[4] = float(y.first);
     c.padding[5] = float(y.second);
     return { groupsX, groupsY, pixels };
+}
+
+inline MinifiedMotionDispatch PrepareJointMinification(Constants& c)
+{
+    auto coverage = c;
+    coverage.motionRect[2] = std::max(c.motionRect[2], c.depthRect[2]);
+    coverage.motionRect[3] = std::max(c.motionRect[3], c.depthRect[3]);
+    const auto plan = PrepareMinifiedMotion(coverage);
+    for (unsigned i = 1; i < 6; ++i)
+        c.padding[i] = coverage.padding[i];
+    return plan;
 }
 
 inline Constants MakeGuideConstants(const Layout& layout, const GuideRegions& regions, GuideExtent motionReference,

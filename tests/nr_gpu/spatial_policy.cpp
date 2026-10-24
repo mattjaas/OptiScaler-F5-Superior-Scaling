@@ -190,6 +190,31 @@ int main()
                             if (span * regions.motion.height / dim.height > 1.0001f)
                                 require(plan.pixels && (y < top || y >= c.height - bottom));
                         }
+                        auto joint = c;
+                        const auto jointPlan = Sp::PrepareJointMinification(joint);
+                        require(jointPlan.pixels >= plan.pixels && jointPlan.pixels <= c.width * c.height);
+                        auto noDepth = joint;
+                        noDepth.padding[0] = 0;
+                        require(Sp::PrepareJointMinification(noDepth).pixels == 0);
+                        for (unsigned axis = 0; axis < 2; ++axis)
+                        {
+                            const auto& a = axis ? layout.warp.y : layout.warp.x;
+                            const auto length = axis ? c.height : c.width;
+                            const auto native = axis ? dim.height : dim.width;
+                            const float source = std::max(c.depthRect[axis + 2], c.motionRect[axis + 2]);
+                            const uint32_t lo = uint32_t(joint.padding[axis ? 4 : 2]),
+                                           hi = uint32_t(joint.padding[axis ? 5 : 3]);
+                            for (uint32_t i = 0; i < length; ++i)
+                            {
+                                const bool center = packed && float(i) >= a.workCenter - a.halfBand * a.scale &&
+                                                    float(i + 1) <= a.workCenter + a.halfBand * a.scale;
+                                const float span = center   ? 1.f / a.scale
+                                                   : packed ? pw::Unpack(float(i + 1), a) - pw::Unpack(float(i), a)
+                                                            : float(native) / length;
+                                if (span * source / native > 1.0001f)
+                                    require(jointPlan.pixels && (i < lo || i >= length - hi));
+                            }
+                        }
                         ++minifyChecks;
                     }
         std::cout << "Minified MV dispatch coverage PASS: " << minifyChecks

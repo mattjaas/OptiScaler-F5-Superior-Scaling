@@ -76,6 +76,10 @@
 #include "superior/precompile/host_uniform_surface_guides_Shader.h"
 #include "superior/precompile/host_minified_surface_guides_Shader.h"
 #include "superior/precompile/host_uniform_minified_surface_guides_Shader.h"
+#include "superior/precompile/host_joint_guides_Shader.h"
+#include "superior/precompile/host_joint_minified_guides_Shader.h"
+#include "superior/precompile/host_uniform_joint_guides_Shader.h"
+#include "superior/precompile/host_uniform_joint_minified_guides_Shader.h"
 #include "precompile/dlssnr_exposure_adapt_Shader.h"
 #include "precompile/dlssnr_lut_Shader.h"
 #include "../output_scaling/OS_Dx12.h"
@@ -2282,6 +2286,9 @@ DlssNr_Dx12::~DlssNr_Dx12()
         _superiorRawLow->Release();
     if (_superiorWarpCache)
         _superiorWarpCache->Release();
+    for (auto* pipeline : _superiorTunableResolve)
+        if (pipeline)
+            pipeline->Release();
     for (auto* pipeline : _superiorNativeResolve)
         if (pipeline)
             pipeline->Release();
@@ -2844,27 +2851,43 @@ bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const Dl
 
     const bool guides = InConstants.mode == 101 || uniform;
     auto constants = InConstants;
-    const auto minified = guides && motionMethod == 2u ? DlssNr::Spatial::PrepareMinifiedMotion(constants)
-                                                       : DlssNr::Spatial::MinifiedMotionDispatch {};
+    constants.unused = g_nr.guideDepthInverted ? 1.f : 0.f;
+    const bool joint = guides && motionMethod == 2u && constants.padding[0] > .5f &&
+                       Config::Instance()->DlssNrSuperiorReconstructDepth.value_or_default();
+    const auto minified = joint                          ? DlssNr::Spatial::PrepareJointMinification(constants)
+                          : guides && motionMethod == 2u ? DlssNr::Spatial::PrepareMinifiedMotion(constants)
+                                                         : DlssNr::Spatial::MinifiedMotionDispatch {};
     ID3D12PipelineState* correction = nullptr;
     auto* pipeline = guides ? _spatialGuidesPipelineState : _spatialPipelineState;
     if (guides && motionMethod != 0u)
     {
-        const unsigned primary = (uniform ? 2u : 0u) + (motionMethod == 2u ? 1u : 0u);
+        const unsigned primary = joint ? (uniform ? 8u : 6u) : (uniform ? 2u : 0u) + (motionMethod == 2u ? 1u : 0u);
         for (unsigned pass = 0; pass < (minified.pixels ? 2u : 1u); ++pass)
         {
-            const unsigned index = pass ? (uniform ? 5u : 4u) : primary;
+            const unsigned index = pass ? (joint ? (uniform ? 9u : 7u) : (uniform ? 5u : 4u)) : primary;
             if (!_superiorSpatialGuidesAttempted[index])
             {
                 _superiorSpatialGuidesAttempted[index] = true;
-                const void* blobs[] { host_spatial_guides_cso,          host_surface_guides_cso,
-                                      host_uniform_guides_cso,          host_uniform_surface_guides_cso,
-                                      host_minified_surface_guides_cso, host_uniform_minified_surface_guides_cso };
-                const size_t sizes[] {
-                    sizeof(host_spatial_guides_cso),          sizeof(host_surface_guides_cso),
-                    sizeof(host_uniform_guides_cso),          sizeof(host_uniform_surface_guides_cso),
-                    sizeof(host_minified_surface_guides_cso), sizeof(host_uniform_minified_surface_guides_cso)
-                };
+                const void* blobs[] { host_spatial_guides_cso,
+                                      host_surface_guides_cso,
+                                      host_uniform_guides_cso,
+                                      host_uniform_surface_guides_cso,
+                                      host_minified_surface_guides_cso,
+                                      host_uniform_minified_surface_guides_cso,
+                                      host_joint_guides_cso,
+                                      host_joint_minified_guides_cso,
+                                      host_uniform_joint_guides_cso,
+                                      host_uniform_joint_minified_guides_cso };
+                const size_t sizes[] { sizeof(host_spatial_guides_cso),
+                                       sizeof(host_surface_guides_cso),
+                                       sizeof(host_uniform_guides_cso),
+                                       sizeof(host_uniform_surface_guides_cso),
+                                       sizeof(host_minified_surface_guides_cso),
+                                       sizeof(host_uniform_minified_surface_guides_cso),
+                                       sizeof(host_joint_guides_cso),
+                                       sizeof(host_joint_minified_guides_cso),
+                                       sizeof(host_uniform_joint_guides_cso),
+                                       sizeof(host_uniform_joint_minified_guides_cso) };
                 CreateComputePipeline(_device, &_superiorSpatialGuides[index], blobs[index], sizes[index], nullptr);
             }
             if (!_superiorSpatialGuides[index])
@@ -2921,7 +2944,7 @@ bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const Dl
     {
         D3D12_RESOURCE_BARRIER barrier {};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        barrier.UAV.pResource = Out1 != nullptr ? Out1 : Out0;
+        barrier.UAV.pResource = joint ? nullptr : Out1 != nullptr ? Out1 : Out0;
         InCmdList->ResourceBarrier(1, &barrier);
         InCmdList->SetPipelineState(correction);
         InCmdList->Dispatch(minified.groupsX, minified.groupsY, 1);
@@ -5750,6 +5773,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             DlssNr::Superior::Fields::SetBandGains(resolveParams, gains.high, gains.low);
             // A raw NR answer when temporal stabilization is inactive, else the decoded signed DLSS residual.
             DlssNr::Superior::Fields::SetResolveFlags(resolveParams, low != nullptr, !g.temporal);
+            if (DlssNr::SuperiorScaling::CustomGuided(cfg.DlssNrSuperiorGuidedRangeSigma.value_or_default(),
+                                                      cfg.DlssNrSuperiorGuidedSpatialSigma.value_or_default()))
+                DlssNr::SuperiorScaling::SetGuided(resolveParams, cfg.DlssNrSuperiorGuidedRangeSigma.value_or_default(),
+                                                   cfg.DlssNrSuperiorGuidedSpatialSigma.value_or_default());
             auto* pso = SuperiorResolvePipeline(resolveParams, !g.temporal, g.packed, g.warpCache.Get() != nullptr);
             const bool lowReady = (gains.high == 1.0f && gains.low == 1.0f) || low != nullptr;
             composed = residual && lowReady && pso &&

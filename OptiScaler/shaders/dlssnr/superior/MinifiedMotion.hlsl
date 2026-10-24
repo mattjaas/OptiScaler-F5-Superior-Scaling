@@ -22,7 +22,7 @@ bool MotionMinifiedBounds(float2 workPixel, bool packed, out int2 first, out int
     return any(b - a > 1.0001);
 }
 
-bool MotionMinifiedSurface(float2 workPixel, bool packed, int2 queryDepthPixel, float queryDepth,
+bool MotionMinifiedSurface(float2 workPixel, bool packed, DLSSNR_DEPTH_QUERY_TYPE queryDepthPixel, float queryDepth,
                            float2 gradient, out float2 selected)
 {
     int2 first, last;

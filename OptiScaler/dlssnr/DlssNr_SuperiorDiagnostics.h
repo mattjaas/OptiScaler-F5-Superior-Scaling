@@ -5,7 +5,7 @@
 namespace DlssNr::SuperiorScaling::Diagnostics
 {
 constexpr uint32_t MvUnits = 1u, InterPass = 2u, Carrier = 4u, Guided = 8u, FinalShaping = 16u, CompressionLow = 32u,
-                   WarpCache = 64u, FullGuided = 128u, PointMotion = 256u, SurfaceMotion = 512u;
+                   WarpCache = 64u, FullGuided = 128u, PointMotion = 256u, SurfaceMotion = 512u, JointDepth = 1024u;
 inline std::optional<uint32_t> LoadMotionMethod(std::optional<uint32_t> method, std::optional<bool> legacyPoint)
 {
     if (method && *method <= 2u)
@@ -30,6 +30,7 @@ template <class C> inline uint32_t Mask(const C& c)
            (c.DlssNrSuperiorSkipCompressionLow.value_or_default() ? CompressionLow : 0u) |
            (c.DlssNrSuperiorSkipWarpCache.value_or_default() ? WarpCache : 0u) |
            (c.DlssNrSuperiorFullGuided.value_or_default() ? FullGuided : 0u) |
+           (MotionMethod(c) == 2u && c.DlssNrSuperiorReconstructDepth.value_or_default() ? JointDepth : 0u) |
            (MotionMethod(c) == 0u   ? PointMotion
             : MotionMethod(c) == 2u ? SurfaceMotion
                                     : 0u);
