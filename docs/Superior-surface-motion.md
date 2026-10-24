@@ -58,7 +58,8 @@ uses the existing matched depth/MV scratch surfaces with two new uniform-grid PS
 MV in the game's raw encoding; NR applies its existing working-grid unit scale. For the new
 ordinary methods, private SR's fused carrier/MV pass consumes that same matched field and converts
 it once into working pixels. It no longer independently point-samples the game's source vectors.
-Hold still emits zero private motion. PSOs are lazy; there are no new per-frame allocations,
+Hold still emits zero private motion. The minification extension below adds a sparse correction
+pass only when needed. PSOs are lazy; there are no new per-frame allocations,
 history buffers, depth-pyramid dispatches or readbacks in the rendering path.
 
 ## Verification
@@ -123,3 +124,137 @@ private SR off/on, compression off/Light/Balanced/Strong and different NR model/
 
 [Raw timestamps](validation/superior-surface-motion-timing.csv) and
 [all medians, variability and block deltas](validation/superior-surface-motion-timing.json).
+
+## Minification-aware surface selection
+
+Depth-aware reconstruction now distinguishes local MV minification from magnification. This
+is based on the **source MV valid rectangle versus the actual working pixel**, not Model
+resolution alone. A 65% NR raster can magnify 1080p game MV while shrinking full-resolution MV;
+with Compress, the center and periphery can need different treatment in the same dispatch.
+
+When the nearest vector's local depth plane disagrees with the point-sampled depth sent to NR,
+the minification path maps both edges of the working pixel back to the source MV lattice.
+Uniform scaling uses the exact X/Y extent ratios. Compress uses `PwUnpack` at the pixel edges,
+so the search covers the nonlinear, potentially asymmetric footprint rather than approximating
+it by a global compression percentage or a center derivative. The existing five axial samples
+alone could miss a small surface represented only by a diagonal texel in a shrinking 2x2 footprint.
+
+Within that footprint, select the nearest finite source vector whose depth, transported along
+the existing limited device-depth plane, matches the query surface. Device-depth comparison
+remains reversed-Z symmetric. The output depth is unchanged; this does **not** dilate foreground
+or average the motion of overlapping objects and background. Smooth fields retain their existing
+limited reconstruction. Constant fields retain their original fast return. Missing or invalid depth keeps the existing
+motion-only fallback, rather than guessing a foreground layer.
+
+Coverage is exhaustive up to eight source texels per axis (64 locations). Larger footprints use
+at most 8x8 stratified samples spanning the entire footprint; this is a bounded approximation,
+not proof of recovering every subpixel surface under arbitrary reduction. If no matching finite
+sample is found, the previous five-sample fallback remains. The existing Depth-aware PSOs remain byte-identical. When no part of the image shrinks the MV
+lattice, exactly the previous GPU path runs. When minification is required, an additional sparse
+correction dispatch follows it, with one MV UAV barrier. Four disjoint edge bands are compacted
+into that one dispatch; the center is not launched unless it also shrinks MV. Pure uniform
+minification covers the full working raster. Binary searches use the separable warp, with two
+extra boundary texels to guard CPU/GPU rounding; the shader still checks exact local footprints.
+The center's constant derivative is evaluated analytically to avoid false minification from
+FP32 subtraction of large pixel coordinates. A 2D dispatch handles work lists larger than 65,535
+groups. Both passes share the same constants and descriptors.
+
+There are no new textures, per-frame allocations or history. Motion units, NR/private-SR sharing,
+color processing and gains are unchanged. Point sampled and Bilinear + motion guard remain available.
+All 56 previously shipped Superior blobs are byte-identical; two new, lazily created correction
+PSOs bring the total to 58.
+
+### Minification validation
+
+On RTX 4090 / driver 616.56, the added GPU test covers **2,880 cases / 21,008,340 pixels** at
+25/40/50/100/125% Model resolution, with source MV density 0.5x/1x/2x on each axis, including
+mixed minification/magnification. It covers exact source-to-target 2:1 ratios, fractional ratios,
+nonlinear/asymmetric Compress, odd dimensions, independent valid origins and padded allocations,
+FP16/FP32 source motion, normal/reversed depth, invalid MV/depth, missing depth, smooth affine
+motion, subpixel same-depth steps, diagonal stripes and small moving depth islands. CPU coverage
+checks include 136 layouts up to 4K. Another 140 GPU dispatches use a deliberately small X group
+cap to exercise 2D work-list indexing without allocating giant textures.
+
+Against published baseline `2b2eb39f`:
+
+- 8,607,572 non-minified or depth-disabled queries are bit-identical, including output depth.
+- All 1,514,252 recoverable flat-layer queries within exhaustive footprint coverage choose the
+  expected query-depth layer; 2,008 previously incorrect choices are corrected, with zero
+  previously correct layer choices regressing in that fixture.
+- No mixed foreground/background vectors are generated. Minified depth-island RMS decreases
+  from 0.414471601 to 0.387100630 working pixels over 1,550,096 queries. Some surfaces have no
+  representative source vector; searching a larger footprint cannot invent the missing motion.
+- Maximum interior FP32 affine-field error is 0.000026703 working pixels.
+- The original 576-case surface suite retains its reported metrics, including the revealed-
+  background sequence and single NR/private-SR unit conversion. Original spatial, continuous-
+  motion, carrier and CPU policy checks also pass.
+
+These are synthetic motion/depth checks, not proof of image-quality improvement in every game.
+Compare in-game motion at the same Model resolution/Compress settings with **Skip MV unit
+conversion off**. The method remains experimental.
+
+Reproduce:
+
+```powershell
+./tools/compile_nr_interpass.ps1 -Check
+# Optional timestamp baseline; quality tests also compare against the shipped original PSOs.
+python tools/prepare_minified_motion_baseline.py
+./tools/test_superior_port.ps1 -GpuSurfaceMotion -GpuMotion -GpuSpatial
+./tools/test_superior_port.ps1 -GpuMinifiedMotionTiming
+```
+
+The optional timestamp baseline requires `2b2eb39f` in local history. It is saved only under
+ignored `artifacts/validation/motion-minify-base`, never substituted for production shaders.
+
+### Timestamp cost of the minification extension
+
+Resident synthetic 3840x2160, RTX 4090 / driver 616.56, 1920x1080 RG16F source MV and 3840x2160
+R32F depth. Compare **published Depth-aware 2b2eb39f versus the minification extension**, not
+Point or Bilinear. Both variants include guide preparation, fused carrier/private-motion preparation
+and their barriers/transitions. The candidate additionally includes the sparse correction dispatch
+and its MV UAV barrier where required. Proprietary NR/DLSS inference and the rest of the frame
+are excluded. There are no CPU uploads/readbacks inside timestamp intervals.
+
+Each of 21 configurations uses eight alternating ABBA/BAAB blocks, eight warmup quartets and
+forty measured quartets per block, four repetitions per timestamp, 640 samples per variant.
+Background GPU use was 2% after the run. Fields are gentle affine motion with a sloped depth plane,
+a single depth/motion edge, and many small diagonal depth islands (a stress fixture, not a game).
+Balanced Compress is active in packed configurations; 28% is used because 25% + Balanced is
+below the production minimum packed extent. Ordinary 25% tests exact source-MV-to-work 2:1
+reduction. Ordinary 65% magnifies source MV and launches no correction; all three paired medians
+are zero. Small differences relative to the listed variability must not be presented as a
+confirmed whole-game cost or speedup.
+
+| Configuration | Baseline median ms | Extended median ms | Paired delta ms | Paired stddev ms |
+| --- | ---: | ---: | ---: | ---: |
+| Balanced-affine, 28% | 0.054784 | 0.093440 | +0.038400 | 0.023518 |
+| Balanced-affine, 40% | 0.032256 | 0.050432 | +0.018432 | 0.027063 |
+| Balanced-affine, 65% | 0.103680 | 0.115456 | +0.011776 | 0.037572 |
+| Balanced-affine, 100% | 0.287232 | 0.297728 | +0.010496 | 0.035804 |
+| Balanced-edge, 28% | 0.036608 | 0.052224 | +0.015488 | 0.011499 |
+| Balanced-edge, 40% | 0.053248 | 0.075776 | +0.022528 | 0.021706 |
+| Balanced-edge, 65% | 0.076800 | 0.084480 | +0.007552 | 0.030151 |
+| Balanced-edge, 100% | 0.216576 | 0.222720 | +0.006272 | 0.038051 |
+| Balanced-islands, 28% | 0.020480 | 0.040448 | +0.020224 | 0.028593 |
+| Balanced-islands, 40% | 0.031744 | 0.052480 | +0.020864 | 0.041648 |
+| Balanced-islands, 65% | 0.108288 | 0.120320 | +0.012032 | 0.051992 |
+| Balanced-islands, 100% | 0.280576 | 0.290816 | +0.009984 | 0.027332 |
+| Ordinary-affine, 25% | 0.022784 | 0.041472 | +0.018624 | 0.024660 |
+| Ordinary-affine, 40% | 0.036608 | 0.060160 | +0.023552 | 0.042230 |
+| Ordinary-affine, 65% | 0.128768 | 0.128512 | +0.000000 | 0.023145 |
+| Ordinary-edge, 25% | 0.031744 | 0.045824 | +0.014208 | 0.013320 |
+| Ordinary-edge, 40% | 0.026368 | 0.038400 | +0.011904 | 0.024735 |
+| Ordinary-edge, 65% | 0.088576 | 0.088064 | +0.000000 | 0.014327 |
+| Ordinary-islands, 25% | 0.017920 | 0.036864 | +0.018944 | 0.021733 |
+| Ordinary-islands, 40% | 0.035328 | 0.051968 | +0.016512 | 0.032630 |
+| Ordinary-islands, 65% | 0.118016 | 0.117760 | +0.000000 | 0.021234 |
+
+At 100% + Balanced, the recorded paired overhead is 0.006272–0.010496 ms; at 65% + Balanced,
+0.007552–0.012032 ms; actual ordinary reduction at 25/40% costs 0.011904–0.023552 ms in these
+fixtures. More aggressive 28% + Balanced costs 0.015488–0.038400 ms. Pure magnification retains
+the exact previous GPU path. Results on other cards and full-game NR/DLSS timings still need
+in-game verification.
+
+[Raw timestamps](validation/superior-minified-motion-timing.csv),
+[medians, variability and individual block deltas](validation/superior-minified-motion-timing.json),
+and [GPU quality output](validation/superior-minified-motion-quality.txt).

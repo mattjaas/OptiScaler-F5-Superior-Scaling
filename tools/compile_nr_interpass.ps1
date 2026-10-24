@@ -112,6 +112,8 @@ try {
     Build (Join-Path $shaders "superior/SpatialGuides.hlsl") "SuperiorSurfaceGuidesMain" @() "host_surface_guides"
     Build (Join-Path $shaders "superior/SpatialGuides.hlsl") "SuperiorUniformGuidesMain" @() "host_uniform_guides"
     Build (Join-Path $shaders "superior/SpatialGuides.hlsl") "SuperiorUniformSurfaceGuidesMain" @() "host_uniform_surface_guides"
+    Build (Join-Path $shaders "superior/MinifiedMotion.hlsl") "SuperiorMinifiedGuidesMain" @() "host_minified_surface_guides"
+    Build (Join-Path $shaders "superior/MinifiedMotion.hlsl") "SuperiorUniformMinifiedGuidesMain" @() "host_uniform_minified_surface_guides"
 
     # The host resolve preserves janblade's exposure and composition and substitutes only the residual estimator.
     # raw: the non-temporal resolve; its SDR and HDR builds are identical bytecode, so there is one blob for both.

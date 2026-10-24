@@ -29,22 +29,29 @@ param(
     [switch]$GpuMotion,
     [switch]$GpuMotionTiming,
     [switch]$GpuSurfaceMotion,
-    [switch]$GpuSurfaceMotionTiming
+    [switch]$GpuSurfaceMotionTiming,
+    [switch]$GpuMinifiedMotionTiming
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $skipped = 3 # prepare_superior_*.py: the port's history is not in this clone
 Push-Location $repo
 try {
+    $python = Get-Command python -ErrorAction SilentlyContinue
     if ($GpuDiagnosticsTiming) { $GpuDiagnostics = $true }
     if ($GpuMotionTiming) { $GpuMotion = $true }
     if ($GpuSurfaceMotionTiming) { $GpuSurfaceMotion = $true }
+    if ($GpuMinifiedMotionTiming) {
+        if (!$python) { throw '-GpuMinifiedMotionTiming needs Python to save the baseline shaders' }
+        & python tools/prepare_minified_motion_baseline.py
+        if ($LASTEXITCODE -ne 0) { throw 'Minified MV baseline unavailable; fetch baseline history first' }
+        $GpuSurfaceMotion = $true
+    }
     if (($GpuQuality -or $GpuTiming) -and
         (!$ReferenceShaderDirectory -or !(Test-Path -LiteralPath $ReferenceShaderDirectory -PathType Container))) {
         throw '-GpuQuality and -GpuTiming compare against the original v59 shaders: pass -ReferenceShaderDirectory ' +
               '<v59 checkout>/OptiScaler/shaders/dlssnr/precompile (mattjaas v59, 914d8d1f). It is not in this repository.'
     }
-    $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python) {
         & python tests/test_nr_superior_scaling.py
         if ($LASTEXITCODE -ne 0) { throw 'Shader identity/ABI test failed' }
@@ -111,8 +118,9 @@ try {
     if ($GpuDiagnosticsTiming) { $names += 'stage_bypass_timing' }
     if ($GpuMotion) { $names += 'continuous_motion_quality' }
     if ($GpuMotionTiming) { $names += 'continuous_motion_timing' }
-    if ($GpuSurfaceMotion) { $names += 'surface_motion_quality' }
+    if ($GpuSurfaceMotion) { $names += @('surface_motion_quality', 'minified_motion_quality') }
     if ($GpuSurfaceMotionTiming) { $names += 'surface_motion_timing' }
+    if ($GpuMinifiedMotionTiming) { $names += 'minified_motion_timing' }
     if ($GpuCandidates -or $GpuCandidateTiming) {
         $names += @('four_candidates_quality', 'fused_pack_experiment')
         if ($GpuCandidateTiming) { $names += 'four_candidates_timing' }
@@ -185,10 +193,16 @@ try {
     if ($GpuSurfaceMotion) {
         & "$out/surface_motion_quality.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Surface-aware motion GPU test failed' }
+        & "$out/minified_motion_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Minified surface-aware motion GPU test failed' }
     }
     if ($GpuSurfaceMotionTiming) {
         & "$out/surface_motion_timing.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Surface-aware motion GPU timing failed' }
+    }
+    if ($GpuMinifiedMotionTiming) {
+        & "$out/minified_motion_timing.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Minified motion GPU timing failed' }
     }
     if ($GpuSpatialTiming) {
         & "$out/spatial_timing.exe"

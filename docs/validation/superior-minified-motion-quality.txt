@@ -1,0 +1,15 @@
+GPU: NVIDIA GeForce RTX 4090; driver 616.56
+Baseline: 2b2eb39fc6857260f6c5d6b06564f24fb36dfbf3
+Minified MV dispatch coverage PASS: 136 layouts; no-depth, 25/40/50/65/100/125%, offset MV rectangles and 4K
+Surface group 0: 2326900 samples, point/bilinear/limited RMS 0.652617889 / 0.652617875 / 0.016978410 px
+Surface group 1: 11634500 samples, point/bilinear/limited RMS 0.456782497 / 0.461863007 / 0.110294961 px
+Surface group 2: 6980700 samples, point/bilinear/limited RMS 0.000477050 / 0.011086958 / 0.000477054 px
+Surface group 3: 2326900 samples, point/bilinear/limited RMS 0.061717200 / 0.001621269 / 0.001704886 px
+Surface group 4: 2326900 samples, point/bilinear/limited RMS 0.049704007 / 0.001423443 / 0.002332556 px
+Surface motion: 576 cases / 32515536 pixels; small-step mixed vectors old 30424, new 0; reversed-Z, offsets, FP16/FP32, no-depth, 65/100/125%, packed and uniform
+Revealed background: 32736 current-frame queries; point/bilinear/limited RMS 0.870852764 / 0.870853126 / 0.000001047 px
+Shared NR/private-DLSS motion: 70686528 components, single unit conversion and Hold checked
+2D minifier work-list dispatches: 140
+Regressed depth-layer choices: 0
+Minified motion: 2880 cases, 21008340 pixels, 1514252 recoverable queries; mixed vectors 0; affine max 0.000026703 px
+Against 2b2eb39f: 8607572 bit-identical non-minified/no-depth queries; 2008 corrected layer choices; layer RMS 0.414471601 -> 0.387100630 px (1550096 queries)

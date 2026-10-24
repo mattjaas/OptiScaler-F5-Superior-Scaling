@@ -74,6 +74,8 @@
 #include "superior/precompile/host_surface_guides_Shader.h"
 #include "superior/precompile/host_uniform_guides_Shader.h"
 #include "superior/precompile/host_uniform_surface_guides_Shader.h"
+#include "superior/precompile/host_minified_surface_guides_Shader.h"
+#include "superior/precompile/host_uniform_minified_surface_guides_Shader.h"
 #include "precompile/dlssnr_exposure_adapt_Shader.h"
 #include "precompile/dlssnr_lut_Shader.h"
 #include "../output_scaling/OS_Dx12.h"
@@ -2841,20 +2843,36 @@ bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const Dl
         return false;
 
     const bool guides = InConstants.mode == 101 || uniform;
+    auto constants = InConstants;
+    const auto minified = guides && motionMethod == 2u ? DlssNr::Spatial::PrepareMinifiedMotion(constants)
+                                                       : DlssNr::Spatial::MinifiedMotionDispatch {};
+    ID3D12PipelineState* correction = nullptr;
     auto* pipeline = guides ? _spatialGuidesPipelineState : _spatialPipelineState;
     if (guides && motionMethod != 0u)
     {
-        const unsigned index = (uniform ? 2u : 0u) + (motionMethod == 2u ? 1u : 0u);
-        if (!_superiorSpatialGuidesAttempted[index])
+        const unsigned primary = (uniform ? 2u : 0u) + (motionMethod == 2u ? 1u : 0u);
+        for (unsigned pass = 0; pass < (minified.pixels ? 2u : 1u); ++pass)
         {
-            _superiorSpatialGuidesAttempted[index] = true;
-            const void* blobs[] { host_spatial_guides_cso, host_surface_guides_cso, host_uniform_guides_cso,
-                                  host_uniform_surface_guides_cso };
-            const size_t sizes[] { sizeof(host_spatial_guides_cso), sizeof(host_surface_guides_cso),
-                                   sizeof(host_uniform_guides_cso), sizeof(host_uniform_surface_guides_cso) };
-            CreateComputePipeline(_device, &_superiorSpatialGuides[index], blobs[index], sizes[index], nullptr);
+            const unsigned index = pass ? (uniform ? 5u : 4u) : primary;
+            if (!_superiorSpatialGuidesAttempted[index])
+            {
+                _superiorSpatialGuidesAttempted[index] = true;
+                const void* blobs[] { host_spatial_guides_cso,          host_surface_guides_cso,
+                                      host_uniform_guides_cso,          host_uniform_surface_guides_cso,
+                                      host_minified_surface_guides_cso, host_uniform_minified_surface_guides_cso };
+                const size_t sizes[] {
+                    sizeof(host_spatial_guides_cso),          sizeof(host_surface_guides_cso),
+                    sizeof(host_uniform_guides_cso),          sizeof(host_uniform_surface_guides_cso),
+                    sizeof(host_minified_surface_guides_cso), sizeof(host_uniform_minified_surface_guides_cso)
+                };
+                CreateComputePipeline(_device, &_superiorSpatialGuides[index], blobs[index], sizes[index], nullptr);
+            }
+            if (!_superiorSpatialGuides[index])
+                return false;
+            if (pass)
+                correction = _superiorSpatialGuides[index];
         }
-        pipeline = _superiorSpatialGuides[index];
+        pipeline = _superiorSpatialGuides[primary];
     }
     if (!pipeline)
         return false;
@@ -2886,7 +2904,7 @@ bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const Dl
     for (uint32_t i = 0; i < kUavCount; ++i)
         CreateUnorderedAccessView(_device, uavs[i], currentHeap.GetUavCPU(i), 0);
 
-    if (!CreateConstantsBuffer(_device, _constantBuffers[slot], InConstants, currentHeap.GetCbvCPU(0)))
+    if (!CreateConstantsBuffer(_device, _constantBuffers[slot], constants, currentHeap.GetCbvCPU(0)))
     {
         LOG_ERROR("[{0}] Failed to create a constants buffer", _name);
         return false;
@@ -2899,6 +2917,15 @@ bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const Dl
     InCmdList->SetComputeRootDescriptorTable(0, currentHeap.GetTableGPUStart());
     InCmdList->Dispatch((InConstants.width + _numThreadsX - 1) / _numThreadsX,
                         (InConstants.height + _numThreadsY - 1) / _numThreadsY, 1);
+    if (correction)
+    {
+        D3D12_RESOURCE_BARRIER barrier {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.UAV.pResource = Out1 != nullptr ? Out1 : Out0;
+        InCmdList->ResourceBarrier(1, &barrier);
+        InCmdList->SetPipelineState(correction);
+        InCmdList->Dispatch(minified.groupsX, minified.groupsY, 1);
+    }
 
     return true;
 }

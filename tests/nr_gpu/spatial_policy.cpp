@@ -2,11 +2,12 @@
 #include "../../OptiScaler/shaders/dlssnr/DlssNr_Spatial.h"
 #include "../../OptiScaler/dlssnr/DlssNr_SuperiorScaling.h"
 
-void require(bool value)
+void require(bool value, int line)
 {
     if (!value)
-        throw std::runtime_error("Spatial metadata/gain policy failed");
+        throw std::runtime_error("Spatial metadata/gain policy failed at line " + std::to_string(line));
 }
+#define require(value) require(value, __LINE__)
 int main()
 {
     try
@@ -132,6 +133,67 @@ int main()
                             require(block.high == float(high) && block.low == float(low / (end - first)));
                         }
                 }
+        unsigned minifyChecks = 0;
+        for (auto dim : { DlssNr::GuideExtent { 320, 192 }, { 321, 193 }, { 3840, 2160 } })
+            for (float scale : { .25f, .4f, .5f, .65f, 1.f, 1.25f })
+                for (bool packed : { false, true })
+                    for (float density : { .25f, .5f, 1.f, 2.f })
+                    {
+                        auto layout = Sp::Build(settings, dim.width, dim.height, scale, false);
+                        if (packed && !layout.active)
+                            continue;
+                        if (!packed)
+                        {
+                            layout.modelW = layout.ordinaryW;
+                            layout.modelH = layout.ordinaryH;
+                            layout.warp.x = pw::BuildAxis(dim.width, dim.width, layout.modelW, 1, 0, 0);
+                            layout.warp.y = pw::BuildAxis(dim.height, dim.height, layout.modelH, 1, 0, 0);
+                        }
+                        const DlssNr::GuideRegions regions { { 3, 7, dim.width, dim.height },
+                                                             { 5, 11, uint32_t(dim.width * density),
+                                                               uint32_t(dim.height * density) } };
+                        auto c = Sp::MakeGuideConstants(layout, regions, { dim.width, dim.height }, -2, 3);
+                        c.mode = packed ? 101u : 104u;
+                        auto disabled = c;
+                        disabled.padding[0] = 0;
+                        require(!Sp::PrepareMinifiedMotion(disabled).pixels);
+                        c.padding[0] = 1;
+                        const auto plan = Sp::PrepareMinifiedMotion(c);
+                        require(plan.pixels <= c.width * c.height);
+                        const uint32_t left = uint32_t(c.padding[2]), right = uint32_t(c.padding[3]);
+                        const uint32_t top = uint32_t(c.padding[4]), bottom = uint32_t(c.padding[5]);
+                        require(left + right <= c.width && top + bottom <= c.height);
+                        if (plan.pixels)
+                        {
+                            require(plan.groupsX <= 65535 && plan.groupsY <= 65535);
+                            require(uint64_t(plan.groupsX) * plan.groupsY * 64 >= plan.pixels);
+                        }
+                        for (uint32_t x = 0; x < c.width; ++x)
+                        {
+                            const auto& a = layout.warp.x;
+                            const bool inCenter = packed && float(x) >= a.workCenter - a.halfBand * a.scale &&
+                                                  float(x + 1) <= a.workCenter + a.halfBand * a.scale;
+                            const float span = inCenter ? 1.f / a.scale
+                                               : packed ? pw::Unpack(float(x + 1), a) - pw::Unpack(float(x), a)
+                                                        : float(dim.width) / c.width;
+                            if (span * regions.motion.width / dim.width > 1.0001f)
+                                require(plan.pixels && (x < left || x >= c.width - right));
+                        }
+                        for (uint32_t y = 0; y < c.height; ++y)
+                        {
+                            const auto& a = layout.warp.y;
+                            const bool inCenter = packed && float(y) >= a.workCenter - a.halfBand * a.scale &&
+                                                  float(y + 1) <= a.workCenter + a.halfBand * a.scale;
+                            const float span = inCenter ? 1.f / a.scale
+                                               : packed ? pw::Unpack(float(y + 1), a) - pw::Unpack(float(y), a)
+                                                        : float(dim.height) / c.height;
+                            if (span * regions.motion.height / dim.height > 1.0001f)
+                                require(plan.pixels && (y < top || y >= c.height - bottom));
+                        }
+                        ++minifyChecks;
+                    }
+        std::cout << "Minified MV dispatch coverage PASS: " << minifyChecks
+                  << " layouts; no-depth, 25/40/50/65/100/125%, offset MV rectangles and 4K\n";
         std::cout << "Spatial metadata and final-resolution gain policy PASS: " << checks << " cases; " << bandChecks
                   << " split high/low gain cases, mixed blocks and final tails; "
                   << "native/pre/post-SR, clipped/offset guides, exact Superior grid and both packed axes\n";

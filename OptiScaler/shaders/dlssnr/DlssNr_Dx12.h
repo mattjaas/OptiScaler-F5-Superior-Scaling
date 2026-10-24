@@ -133,8 +133,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // pipelines of one shader, built on first use the same way. Not retried once they failed to build.
     ID3D12PipelineState* _spatialPipelineState = nullptr;
     ID3D12PipelineState* _spatialGuidesPipelineState = nullptr;
-    ID3D12PipelineState* _superiorSpatialGuides[4] = {};
-    bool _superiorSpatialGuidesAttempted[4] = {};
+    ID3D12PipelineState* _superiorSpatialGuides[6] = {};
+    bool _superiorSpatialGuidesAttempted[6] = {};
     bool _spatialPipelineFailed = false;
 
     // The LUT pass (dlssnr_lut.hlsl, LUT-apply epic Story 2: dlssnr-lut-apply).

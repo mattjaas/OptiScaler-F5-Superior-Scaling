@@ -423,6 +423,113 @@ inline Constants MakeConstants(const Layout& layout, uint32_t mode, const GuideR
     return c;
 }
 
+// Conservative derivative bound: if false, not even the most compressed edge can
+// shrink the source MV lattice. The minification shader checks actual pixel edges.
+// Keep this independent of vector units and the source allocation's padding.
+inline bool NeedsMinifiedMotion(const Constants& c)
+{
+    if (c.padding[0] <= .5f || !c.width || !c.height)
+        return false;
+    if (c.mode == 104u)
+        return c.motionRect[2] > float(c.width) * 1.0001f || c.motionRect[3] > float(c.height) * 1.0001f;
+    const auto& w = c.warp;
+    const float minX = w.workScaleX * std::min(1.f, std::min(w.sideEdgeSlopeNegX, w.sideEdgeSlopePosX));
+    const float minY = w.workScaleY * std::min(1.f, std::min(w.sideEdgeSlopeNegY, w.sideEdgeSlopePosY));
+    return c.motionRect[2] > w.nativeWidth * minX * 1.0001f || c.motionRect[3] > w.nativeHeight * minY * 1.0001f;
+}
+
+struct MinifiedMotionDispatch
+{
+    uint32_t groupsX = 0, groupsY = 0, pixels = 0;
+};
+
+// Compact four disjoint edge bands into one dispatch. The center is not launched
+// unless it also shrinks MV. No allocation or texture is needed for this work list.
+inline MinifiedMotionDispatch PrepareMinifiedMotion(Constants& c)
+{
+    if (!NeedsMinifiedMotion(c))
+        return {};
+    const auto& w = c.warp;
+    const auto axis = [&](bool y)
+    {
+        pw::Axis a {};
+        a.nativeExtent = y ? w.nativeHeight : w.nativeWidth;
+        a.workExtent = y ? float(c.height) : float(c.width);
+        a.bandCenter = y ? w.bandCenterY : w.bandCenterX;
+        a.workCenter = y ? w.workCenterY : w.workCenterX;
+        a.scale = y ? w.workScaleY : w.workScaleX;
+        a.halfSpan[0] = y ? w.halfSpanNegY : w.halfSpanNegX;
+        a.halfSpan[1] = y ? w.halfSpanPosY : w.halfSpanPosX;
+        a.center[0] = y ? w.sideCenterNegY : w.sideCenterNegX;
+        a.center[1] = y ? w.sideCenterPosY : w.sideCenterPosX;
+        a.work[0] = y ? w.sideWorkNegY : w.sideWorkNegX;
+        a.work[1] = y ? w.sideWorkPosY : w.sideWorkPosX;
+        a.compression[0] = y ? w.sideCompressionNegY : w.sideCompressionNegX;
+        a.compression[1] = y ? w.sideCompressionPosY : w.sideCompressionPosX;
+        a.edgeSlope[0] = y ? w.sideEdgeSlopeNegY : w.sideEdgeSlopeNegX;
+        a.edgeSlope[1] = y ? w.sideEdgeSlopePosY : w.sideEdgeSlopePosX;
+        return a;
+    };
+    const auto bands = [&](bool y) -> std::pair<uint32_t, uint32_t>
+    {
+        const uint32_t size = y ? c.height : c.width;
+        const float source = c.motionRect[y ? 3 : 2];
+        if (c.mode == 104u)
+            return source > float(size) * 1.0001f ? std::make_pair(size, 0u) : std::make_pair(0u, 0u);
+        const auto a = axis(y);
+        const auto shrinking = [&](uint32_t i)
+        {
+            const float halfBand = a.center[0] * a.halfSpan[0] * a.scale;
+            if (float(i) >= a.workCenter - halfBand && float(i + 1) <= a.workCenter + halfBand)
+                return source > a.nativeExtent * a.scale * 1.0001f;
+            return (pw::Unpack(float(i + 1), a) - pw::Unpack(float(i), a)) * source / a.nativeExtent > 1.f;
+        };
+        const uint32_t center = std::min(size - 1, uint32_t(std::max(0.f, std::floor(a.workCenter))));
+        if (shrinking(center))
+            return { size, 0 };
+        uint32_t first = 0, last = 0;
+        if (shrinking(0))
+        {
+            uint32_t lo = 0, hi = center;
+            while (lo < hi)
+            {
+                const uint32_t mid = (lo + hi + 1) / 2;
+                if (shrinking(mid))
+                    lo = mid;
+                else
+                    hi = mid - 1;
+            }
+            first = std::min(size, lo + 3); // guard two texels against CPU/GPU mapping roundoff
+        }
+        if (shrinking(size - 1))
+        {
+            uint32_t lo = center, hi = size - 1;
+            while (lo < hi)
+            {
+                const uint32_t mid = (lo + hi) / 2;
+                if (shrinking(mid))
+                    hi = mid;
+                else
+                    lo = mid + 1;
+            }
+            last = std::min(size - first, size - lo + 2);
+        }
+        return { first, last };
+    };
+    const auto x = bands(false), y = bands(true);
+    const uint32_t pixels = (y.first + y.second) * c.width + (c.height - y.first - y.second) * (x.first + x.second);
+    if (!pixels)
+        return {};
+    const uint32_t groups = (pixels + 63) / 64;
+    const uint32_t groupsX = std::min(groups, 65535u), groupsY = (groups + groupsX - 1) / groupsX;
+    c.padding[1] = float(groupsX * 64);
+    c.padding[2] = float(x.first);
+    c.padding[3] = float(x.second);
+    c.padding[4] = float(y.first);
+    c.padding[5] = float(y.second);
+    return { groupsX, groupsY, pixels };
+}
+
 inline Constants MakeGuideConstants(const Layout& layout, const GuideRegions& regions, GuideExtent motionReference,
                                     float gameMvX, float gameMvY)
 {
