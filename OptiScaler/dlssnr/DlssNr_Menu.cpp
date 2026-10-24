@@ -3475,10 +3475,25 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                        "resolution. Independent of the NR model preset and the game's own DLSS preset.");
             ImGui::EndDisabled();
 
+            static const char* motionMethods[] = { "Point sampled", "Bilinear + motion guard",
+                                                   "Depth-aware limited reconstruction" };
+            int motionMethod = int(DlssNr::SuperiorScaling::Diagnostics::MotionMethod(*config));
+            if (ImGui::Combo("Motion reconstruction (experimental)", &motionMethod, motionMethods,
+                             IM_ARRAYSIZE(motionMethods)))
+            {
+                config->DlssNrSuperiorMotionMethod = uint32_t(motionMethod);
+                config->DlssNrSuperiorPointMotion = motionMethod == 0;
+            }
+            HelpMarker("MV resampling for Superior, with or without Compress. Point selects one texel. Bilinear "
+                       "interpolates a smooth field with the previous 1-pixel guard. Depth-aware uses depth and "
+                       "limited motion slopes to avoid mixing layers. No resampling is added at native 100% without "
+                       "Compress. Method changes reset history. These are experimental comparisons, not a guarantee "
+                       "of improved game motion. MV unit conversion is a separate diagnostic switch.");
+
             if (ImGui::TreeNode("Superior stage bypasses (diagnostic)"))
             {
                 ImGui::TextWrapped("Change one stage at a time. Each change resets NR and residual history. "
-                                   "All boxes clear restores the default experimental path.");
+                                   "Reset leaves the selected motion method unchanged.");
                 const auto option = [&](const char* label, auto& setting, const char* help)
                 {
                     bool value = setting.value_or_default();
@@ -3510,10 +3525,6 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                 option("Use full-frame guided at 100%", config->DlssNrSuperiorFullGuided,
                        "Disable this branch's uncompressed-center bypass. At 100% with Compress, guided runs "
                        "across the whole frame again. No effect while guided reconstruction is skipped.");
-                option("Point-sampled motion (legacy)", config->DlssNrSuperiorPointMotion,
-                       "Restore the previous nearest-texel motion sampling before Compress. Leave off to interpolate "
-                       "smooth motion fields while retaining point sampling across motion discontinuities. "
-                       "Keep Skip MV unit conversion off for this comparison. Only affects Superior with Compress.");
                 if (ImGui::Button("Reset stage bypasses"))
                 {
                     config->DlssNrSuperiorSkipMvUnits = false;
@@ -3524,7 +3535,6 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                     config->DlssNrSuperiorSkipCompressionLow = false;
                     config->DlssNrSuperiorSkipWarpCache = false;
                     config->DlssNrSuperiorFullGuided = false;
-                    config->DlssNrSuperiorPointMotion = false;
                 }
                 ImGui::TreePop();
             }

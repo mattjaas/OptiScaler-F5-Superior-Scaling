@@ -1,5 +1,9 @@
 # Superior Compress: continuous motion sampling experiment
 
+This records the `b231cdea` experiment. The current UI replaces its point-motion checkbox with
+a three-method selector and also supports ordinary scaling; see
+[current motion methods and verification](Superior-surface-motion.md).
+
 The game test of `0dffb390` distinguished two failures at Model resolution 100% with Compress:
 the converted motion was stable but soft in motion; skipping the additional unit conversion
 looked sharper but floated. Original Compress also floated; native NR without Compress did not.

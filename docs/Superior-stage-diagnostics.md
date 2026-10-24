@@ -1,5 +1,9 @@
 # Superior Scaling stage diagnostics
 
+This documents the original diagnostic build. The current UI replaces the point-motion checkbox
+with a three-method selector, usable with or without Compress; see
+[current motion methods and verification](Superior-surface-motion.md). The other eight stage bypasses remain.
+
 This experimental branch adds controls for investigating motion blur with Superior Scaling,
 Model resolution 100% and Compress screen edges. These are diagnostic variants, not proposed
 production quality/performance defaults. A headless shader comparison cannot establish which

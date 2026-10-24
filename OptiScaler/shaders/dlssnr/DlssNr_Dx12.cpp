@@ -71,6 +71,9 @@
 #include "precompile/dlssnr_spatial_Shader.h"
 #include "precompile/dlssnr_spatial_guides_Shader.h"
 #include "superior/precompile/host_spatial_guides_Shader.h"
+#include "superior/precompile/host_surface_guides_Shader.h"
+#include "superior/precompile/host_uniform_guides_Shader.h"
+#include "superior/precompile/host_uniform_surface_guides_Shader.h"
 #include "precompile/dlssnr_exposure_adapt_Shader.h"
 #include "precompile/dlssnr_lut_Shader.h"
 #include "../output_scaling/OS_Dx12.h"
@@ -2306,8 +2309,9 @@ DlssNr_Dx12::~DlssNr_Dx12()
         _spatialPipelineState->Release();
     if (_spatialGuidesPipelineState)
         _spatialGuidesPipelineState->Release();
-    if (_superiorSpatialGuides)
-        _superiorSpatialGuides->Release();
+    for (auto* pipeline : _superiorSpatialGuides)
+        if (pipeline)
+            pipeline->Release();
     for (auto& buffer : _constantBuffers)
     {
         if (buffer != nullptr)
@@ -2829,26 +2833,31 @@ bool DlssNr_Dx12::SpatialReady()
 
 bool DlssNr_Dx12::DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const DlssNr::Spatial::Constants& InConstants,
                                   ID3D12Resource* In0, ID3D12Resource* In1, ID3D12Resource* In2, ID3D12Resource* Out0,
-                                  ID3D12Resource* Out1, bool continuousMotion)
+                                  ID3D12Resource* Out1, uint32_t motionMethod)
 {
-    if (!SpatialReady() || InCmdList == nullptr || _device == nullptr || Out0 == nullptr || InConstants.width == 0 ||
-        InConstants.height == 0)
+    const bool uniform = InConstants.mode == 104u;
+    if ((!uniform && !SpatialReady()) || !_init || InCmdList == nullptr || _device == nullptr || Out0 == nullptr ||
+        InConstants.width == 0 || InConstants.height == 0)
         return false;
 
-    const bool guides = InConstants.mode == 101;
+    const bool guides = InConstants.mode == 101 || uniform;
     auto* pipeline = guides ? _spatialGuidesPipelineState : _spatialPipelineState;
-    if (guides && continuousMotion)
+    if (guides && motionMethod != 0u)
     {
-        if (!_superiorSpatialGuidesAttempted)
+        const unsigned index = (uniform ? 2u : 0u) + (motionMethod == 2u ? 1u : 0u);
+        if (!_superiorSpatialGuidesAttempted[index])
         {
-            _superiorSpatialGuidesAttempted = true;
-            CreateComputePipeline(_device, &_superiorSpatialGuides, host_spatial_guides_cso,
-                                  sizeof(host_spatial_guides_cso), nullptr);
+            _superiorSpatialGuidesAttempted[index] = true;
+            const void* blobs[] { host_spatial_guides_cso, host_surface_guides_cso, host_uniform_guides_cso,
+                                  host_uniform_surface_guides_cso };
+            const size_t sizes[] { sizeof(host_spatial_guides_cso), sizeof(host_surface_guides_cso),
+                                   sizeof(host_uniform_guides_cso), sizeof(host_uniform_surface_guides_cso) };
+            CreateComputePipeline(_device, &_superiorSpatialGuides[index], blobs[index], sizes[index], nullptr);
         }
-        pipeline = _superiorSpatialGuides;
-        if (!pipeline)
-            return false;
+        pipeline = _superiorSpatialGuides[index];
     }
+    if (!pipeline)
+        return false;
     ID3D12Resource* const first = In0 != nullptr ? In0 : In1;
 
     if (first == nullptr)
@@ -4594,6 +4603,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         auto guideConstants = DlssNr::Spatial::MakeEnlargementGuideConstants(
             superior && !(superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::MvUnits), spatialLayout, guides,
             motionReference, g_nr.guideMvScaleX, g_nr.guideMvScaleY);
+        guideConstants.padding[0] = guides.depth.valid() ? 1.0f : 0.0f;
 
         if (!guides.depth.valid())
         {
@@ -4605,10 +4615,9 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             DispatchSpatial(cmdList, MakeConstants(spatialLayout, 100, guides, 1.0f, 1.0f), g_nr.colorCopy, nullptr,
                             nullptr, EdgeCompression::color);
         const bool packedGuides =
-            packedColor &&
-            DispatchSpatial(cmdList, guideConstants, g_nr.colorCopy, depthIn, motionIn, EdgeCompression::depth,
-                            EdgeCompression::motion,
-                            superior && DlssNr::SuperiorScaling::Diagnostics::ContinuousMotion(superiorDiagnostics));
+            packedColor && DispatchSpatial(cmdList, guideConstants, g_nr.colorCopy, depthIn, motionIn,
+                                           EdgeCompression::depth, EdgeCompression::motion,
+                                           superior ? DlssNr::SuperiorScaling::Diagnostics::MotionMethod(cfg) : 0u);
 
         if (!packedGuides)
         {
@@ -5080,7 +5089,9 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     unsigned int evalMotionBaseY = cachePlan.runs ? cachePlan.motionBaseY : reusePlan.motionBaseY;
 
     bool superiorMatched = false;
-    if (superiorGeneration && superiorGeneration->temporal && !superiorPacked && !cached && depthIn)
+    if (superiorGeneration && !superiorPacked && !cached &&
+        (superiorGeneration->temporal || (DlssNr::SuperiorScaling::Diagnostics::MotionMethod(cfg) != 0u &&
+                                          (workWidth != width || workHeight != height))))
     {
         auto matchedRegions = guides;
         matchedRegions.motion.x = evalMotionBaseX;
@@ -5094,7 +5105,7 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         else if (!spatial)
         {
             superiorMatched = true;
-            modelDepth = superiorGeneration->depth.Get();
+            modelDepth = depthIn ? superiorGeneration->depth.Get() : nullptr;
             evalMotion = superiorGeneration->motion.Get();
             evalGuideW = evalMotionW = workWidth;
             evalGuideH = evalMotionH = workHeight;

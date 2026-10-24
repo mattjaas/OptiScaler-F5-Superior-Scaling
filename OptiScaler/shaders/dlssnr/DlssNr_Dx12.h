@@ -133,8 +133,8 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // pipelines of one shader, built on first use the same way. Not retried once they failed to build.
     ID3D12PipelineState* _spatialPipelineState = nullptr;
     ID3D12PipelineState* _spatialGuidesPipelineState = nullptr;
-    ID3D12PipelineState* _superiorSpatialGuides = nullptr;
-    bool _superiorSpatialGuidesAttempted = false;
+    ID3D12PipelineState* _superiorSpatialGuides[4] = {};
+    bool _superiorSpatialGuidesAttempted[4] = {};
     bool _spatialPipelineFailed = false;
 
     // The LUT pass (dlssnr_lut.hlsl, LUT-apply epic Story 2: dlssnr-lut-apply).
@@ -261,11 +261,12 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     //   102  In0 the packed model input, In1 the model's answer                 -> Out0 the unpacked input, Out1 the answer
     //   103  as 102, and In2 the picture the uncompressed path would show the model (ordinary grid): the answer gets
     //        In2 minus the unpacked input added (the Replace curves, which never read the proxy)
+    //   104  Superior's uniform-grid guide resample (method 1/2): In1 depth, In2 raw motion -> matched guides
     // The sampler is the shared linear clamp. Resources are left in the state they arrived in.
     bool SpatialReady();
     bool DispatchSpatial(ID3D12GraphicsCommandList* InCmdList, const DlssNr::Spatial::Constants& InConstants,
                          ID3D12Resource* In0, ID3D12Resource* In1, ID3D12Resource* In2, ID3D12Resource* Out0,
-                         ID3D12Resource* Out1 = nullptr, bool continuousMotion = false);
+                         ID3D12Resource* Out1 = nullptr, uint32_t motionMethod = 0u);
 
     // The LUT pass (dlssnr_lut.hlsl, DlssNr_Lut.h, LUT-apply epic Story 2:
     // dlssnr-lut-apply). Grades InSource (Width x Height, already in the colour

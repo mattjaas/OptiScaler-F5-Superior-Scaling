@@ -8,6 +8,7 @@
 #include <hooks/Streamline_Hooks.h>
 #include <misc/IdentifyGpu.h>
 #include <shaders/dlssnr/DlssNr_ProxyCurve.h>
+#include <dlssnr/DlssNr_SuperiorDiagnostics.h>
 
 #include <SimpleIni.h>
 
@@ -504,6 +505,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrSuperiorSkipWarpCache.set_from_config(readBool("DlssNr", "SuperiorSkipWarpCache"));
             DlssNrSuperiorFullGuided.set_from_config(readBool("DlssNr", "SuperiorFullGuided"));
             DlssNrSuperiorPointMotion.set_from_config(readBool("DlssNr", "SuperiorPointMotion"));
+            DlssNrSuperiorMotionMethod.set_from_config(DlssNr::SuperiorScaling::Diagnostics::LoadMotionMethod(
+                readUInt("DlssNr", "SuperiorMotionMethod"), readBool("DlssNr", "SuperiorPointMotion")));
 
             DlssNrWhitePointFromExposure.set_from_config(readBool("DlssNr", "WhitePointFromExposure"));
             DlssNrProbeD3D11.set_from_config(readBool("DlssNr", "ProbeD3D11"));
@@ -1672,6 +1675,8 @@ bool Config::SaveIni()
                  GetBoolValue(Instance()->DlssNrSuperiorFullGuided.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorPointMotion",
                  GetBoolValue(Instance()->DlssNrSuperiorPointMotion.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorMotionMethod",
+                 GetIntValue(Instance()->DlssNrSuperiorMotionMethod.value_for_config()).c_str());
 
     ini.SetValue("DlssNr", "ProbeD3D11",
                  GetBoolValue(Instance()->DlssNrProbeD3D11.value_for_config()).c_str());

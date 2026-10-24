@@ -393,6 +393,7 @@ struct alignas(16) Constants {
     float unused = 0;
     uint32_t width = 0, height = 0;
     pw::ShaderConstants warp{};
+    // padding[0] is the depth-valid flag for Superior's new guide PSOs; original shaders ignore it.
     float depthRect[4] = {}, motionRect[4] = {}, motionScale[2] = {}, padding[6] = {};
 };
 static_assert(sizeof(Constants) == 256);
