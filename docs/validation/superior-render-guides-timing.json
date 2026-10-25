@@ -1,0 +1,79 @@
+{
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "driver": "616.56",
+  "source_commit": "ee446515a61ab5a5edf406b750df02bf8e506cc0",
+  "output": [
+    3840,
+    2160
+  ],
+  "compression": "Balanced",
+  "model_scale": 1,
+  "preflight": "5% GPU utilization, 27.37 W, 210 MHz",
+  "settled_after": "2% GPU utilization, 28.17 W, 210 MHz",
+  "results": [
+    {
+      "stage": "surface-nr-only-render1080",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.131584,
+      "candidate_median_ms": 0.037632,
+      "paired_delta_median_ms": -0.094208,
+      "paired_delta_stddev_ms": 0.07136415721924973
+    },
+    {
+      "stage": "surface-private-guides-render1080",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.2848,
+      "candidate_median_ms": 0.298752,
+      "paired_delta_median_ms": 0.01427199999999998,
+      "paired_delta_stddev_ms": 0.030527975647158125
+    },
+    {
+      "stage": "joint-nr-only-render1080",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.163584,
+      "candidate_median_ms": 0.049152,
+      "paired_delta_median_ms": -0.114432,
+      "paired_delta_stddev_ms": 0.0811372260554761
+    },
+    {
+      "stage": "joint-private-guides-render1080",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.320768,
+      "candidate_median_ms": 0.331264,
+      "paired_delta_median_ms": 0.010623999999999995,
+      "paired_delta_stddev_ms": 0.033314193805724784
+    },
+    {
+      "stage": "surface-nr-only-render1440",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.141056,
+      "candidate_median_ms": 0.086016,
+      "paired_delta_median_ms": -0.055040000000000006,
+      "paired_delta_stddev_ms": 0.03997395640188826
+    },
+    {
+      "stage": "surface-private-guides-render1440",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.297344,
+      "candidate_median_ms": 0.361728,
+      "paired_delta_median_ms": 0.06438400000000002,
+      "paired_delta_stddev_ms": 0.03550181252011179
+    },
+    {
+      "stage": "joint-nr-only-render1440",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.175104,
+      "candidate_median_ms": 0.136448,
+      "paired_delta_median_ms": -0.03865599999999997,
+      "paired_delta_stddev_ms": 0.02741150795104987
+    },
+    {
+      "stage": "joint-private-guides-render1440",
+      "samples_per_variant": 640,
+      "base_median_ms": 0.33408,
+      "candidate_median_ms": 0.429312,
+      "paired_delta_median_ms": 0.09561599999999995,
+      "paired_delta_stddev_ms": 0.03752216635784213
+    }
+  ]
+}

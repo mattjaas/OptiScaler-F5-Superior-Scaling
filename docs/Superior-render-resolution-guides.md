@@ -61,3 +61,38 @@ smaller NR grid, with and without private guide preparation. It includes guide d
 corrections, carrier/MV preparation and associated barriers; it excludes model inference and the rest
 of the frame. It uses 8 alternating ABBA/BAAB blocks, separate warmup and 640 samples per variant/config.
 Full-game NR/DLSS acceptance and motion appearance must still be compared in the game.
+
+## GPU timestamp results (2026-10-25)
+
+RTX 4090, driver 616.56; 3840x2160 output, Model resolution 100%, Balanced Compress,
+sloped R32F depth and affine RG32F motion at the declared render resolution. Baseline and
+new option use the same source data and motion method. `surface` is the existing Depth-aware
+method with point depth; `joint` enables the experimental joint depth/MV option.
+
+Before the isolated harness: 5% utilization, 27.37 W and 210 MHz. After settling: 2%,
+28.17 W and 210 MHz. A separate earlier 35% utilization reading had no recorded process
+attribution; it cannot establish that a game or another user application was running.
+
+Medians below time the guide preparation, sparse correction and barriers. The private-guides
+rows additionally include uniform private guide reconstruction and fused carrier/MV preparation,
+**without proprietary NR or DLSS inference**. No full-frame or game performance gain is claimed.
+ABBA/BAAB used 8 blocks, 8 warmup quartets per block, 40 measured quartets and four GPU repetitions
+per timestamp: 640 samples per variant/configuration. Delta is the median of paired-quartet
+candidate-minus-baseline means; variability is the standard deviation of those paired deltas.
+
+| Render | Guide method | Timed route | Baseline ms | New ms | Paired delta ms | Delta stddev ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1080p | Depth-aware | NR guides only | 0.131584 | 0.037632 | -0.094208 | 0.071364 |
+| 1080p | Depth-aware | NR + private preparation | 0.284800 | 0.298752 | +0.014272 | 0.030528 |
+| 1080p | Joint | NR guides only | 0.163584 | 0.049152 | -0.114432 | 0.081137 |
+| 1080p | Joint | NR + private preparation | 0.320768 | 0.331264 | +0.010624 | 0.033314 |
+| 1440p | Depth-aware | NR guides only | 0.141056 | 0.086016 | -0.055040 | 0.039974 |
+| 1440p | Depth-aware | NR + private preparation | 0.297344 | 0.361728 | +0.064384 | 0.035502 |
+| 1440p | Joint | NR guides only | 0.175104 | 0.136448 | -0.038656 | 0.027412 |
+| 1440p | Joint | NR + private preparation | 0.334080 | 0.429312 | +0.095616 | 0.037522 |
+
+The smaller NR grid reduced guide preparation cost in these fixtures, but private guide
+reconstruction consumed the savings and added overhead, especially at 1440p. Small 1080p
+private-preparation deltas are below their variability and should not be treated as precise
+predictions. The option stays an opt-in image/motion experiment, not an automatic performance
+policy. Raw samples and summary are in `validation/superior-render-guides-timing.csv` and `.json`.
