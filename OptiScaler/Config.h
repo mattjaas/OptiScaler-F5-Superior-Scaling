@@ -434,10 +434,11 @@ class Config
     // How a model that worked below the frame's size is brought back. 0 classic, 1 matched
     // residual. Only has an effect when Model resolution is under 100%.
     CustomOptional<uint32_t> DlssNrTransfer { 1 }; // 11: Superior Scaling
-    CustomOptional<uint32_t> DlssNrSuperiorScalingPreset { 1 }; // private SR A=1 / D=4 / E=5 / K=11
+    CustomOptional<uint32_t> DlssNrSuperiorScalingPreset { 1 }; // private SR A=1 / C=3 / D=4 / E=5 / F=6 / K=11
     CustomOptional<float> DlssNrSuperiorGuidedRangeSigma { .015f };
     CustomOptional<float> DlssNrSuperiorGuidedSpatialSigma { 3.f };
     CustomOptional<bool> DlssNrSuperiorReconstructDepth { false };
+    CustomOptional<bool> DlssNrSuperiorRenderGuides { false };  // native model resolution + Compress only
     CustomOptional<bool> DlssNrSuperiorResidualDlss { true };   // experimental: skip private SR, keep NR/guided shaping
     CustomOptional<bool> DlssNrSuperiorSkipMvUnits { false };
     CustomOptional<bool> DlssNrSuperiorSkipInterPass { false };

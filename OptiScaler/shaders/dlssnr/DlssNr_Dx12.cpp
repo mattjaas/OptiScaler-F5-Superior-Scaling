@@ -3298,10 +3298,15 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // Compress screen edges (DlssNr_Spatial.inl): whether the model works on a packed picture this frame, and at what
     // size. Everything about the model below (its features, its surfaces, the guides it is handed) follows the packed
     // size; the encode, the resolve and the frame stay at the ordinary ones.
-    const uint64_t spatialSignature = EdgeCompression::SignatureOf(
+    uint64_t spatialSignature = EdgeCompression::SignatureOf(
         colourFormat, depth != nullptr ? guideDesc.Format : DXGI_FORMAT_UNKNOWN,
         depth != nullptr ? (unsigned int) guideDesc.Width : 0u, depth != nullptr ? guideDesc.Height : 0u,
         motionDesc.Format, (unsigned int) motionDesc.Width, motionDesc.Height);
+    if (superior && workScale == 1.f && cfg.DlssNrSuperiorRenderGuides.value_or_default())
+    {
+        spatialSignature = DlssNr::Spatial::Mix(spatialSignature, frame.RenderSubrectWidth);
+        spatialSignature = DlssNr::Spatial::Mix(spatialSignature, frame.RenderSubrectHeight);
+    }
 
     bool spatialReset = false;
     bool spatial =
@@ -3316,8 +3321,16 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                                EdgeCompression::Layout().modelW, EdgeCompression::Layout().modelH);
     // Exposure calibration alone still needs the original unpacked proxy. Normal Superior rendering bypasses it.
     const bool spatialNeedsUnpack = !superiorPacked || CalibrationWanted() || CalibrationActive();
+    const DlssNr::GuideExtent renderGuideSize { frame.RenderSubrectWidth, frame.RenderSubrectHeight };
+    const bool renderGuides = DlssNr::Spatial::UseRenderGuides(
+        superior && workScale == 1.f, cfg.DlssNrSuperiorRenderGuides.value_or_default(), spatial, width, height,
+        workWidth, workHeight, renderGuideSize);
+    const auto spatialGuideLayout = renderGuides
+                                        ? DlssNr::Spatial::RenderGuideLayout(EdgeCompression::Layout(), renderGuideSize)
+                                        : EdgeCompression::Layout();
     if (spatial && (!SpatialReady() ||
-                    !EdgeCompression::Prepare(device, EdgeCompression::Layout(), workScale > 1.0f, spatialNeedsUnpack)))
+                    !EdgeCompression::Prepare(device, EdgeCompression::Layout(), workScale > 1.0f, spatialNeedsUnpack,
+                                              { spatialGuideLayout.modelW, spatialGuideLayout.modelH })))
     {
         EdgeCompression::TurnOff(DlssNr::Spatial::Status::TurnedOffResources);
         g_nr.reset = true;
@@ -4651,8 +4664,8 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 ? DlssNr::GuideExtent { frame.RenderSubrectWidth, frame.RenderSubrectHeight }
                 : DlssNr::GuideExtent { frame.OutputWidth, frame.OutputHeight };
         auto guideConstants = DlssNr::Spatial::MakeEnlargementGuideConstants(
-            superior && !(superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::MvUnits), spatialLayout, guides,
-            motionReference, g_nr.guideMvScaleX, g_nr.guideMvScaleY);
+            superior && !(superiorDiagnostics & DlssNr::SuperiorScaling::Diagnostics::MvUnits), spatialGuideLayout,
+            guides, motionReference, g_nr.guideMvScaleX, g_nr.guideMvScaleY);
         guideConstants.padding[0] = guides.depth.valid() ? 1.0f : 0.0f;
 
         if (!guides.depth.valid())
@@ -5007,12 +5020,12 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     int result = superiorInputReady ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 
-    // What the model is handed as its guides: the game's, at the game's sizes and scale; or packed, where all three are
-    // the packed picture's own (motion in packed pixels, so a scale of 1).
-    unsigned int evalGuideW = spatial ? modelWidth : guideWidth;
-    unsigned int evalGuideH = spatial ? modelHeight : guideHeight;
-    unsigned int evalMotionW = spatial ? modelWidth : motionWidth;
-    unsigned int evalMotionH = spatial ? modelHeight : motionHeight;
+    // Packed vectors use pixels of their own guide subrect (scale 1), which may
+    // optionally be smaller than the NR colour raster. Uncompressed guides retain their game's sizes and units.
+    unsigned int evalGuideW = spatial ? spatialGuideLayout.modelW : guideWidth;
+    unsigned int evalGuideH = spatial ? spatialGuideLayout.modelH : guideHeight;
+    unsigned int evalMotionW = spatial ? spatialGuideLayout.modelW : motionWidth;
+    unsigned int evalMotionH = spatial ? spatialGuideLayout.modelH : motionHeight;
     unsigned int evalDepthX = spatial ? 0u : depthBaseX;
     unsigned int evalDepthY = spatial ? 0u : depthBaseY;
     float evalMvScaleX = spatial ? 1.0f : g_nr.guideMvScaleX * mvToWorkX;

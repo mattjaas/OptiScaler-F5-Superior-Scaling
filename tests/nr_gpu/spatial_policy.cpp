@@ -51,6 +51,48 @@ int main()
             }
         // Declaration controls vector units even when the available subrect is clipped.
         const auto native = Sp::Build(settings, 3840, 2160, 1.f, false);
+        const auto renderGuides = Sp::RenderGuideLayout(native, { 1920, 1080 });
+        require(renderGuides.modelW == 1728 && renderGuides.modelH == 976);
+        for (bool superior : { false, true })
+            for (bool requested : { false, true })
+                for (bool compressed : { false, true })
+                    for (unsigned ordinary : { 2496u, 3840u, 4800u })
+                        require(Sp::UseRenderGuides(superior, requested, compressed, 3840, 2160, ordinary, 2160,
+                                                    { 1920, 1080 }) ==
+                                (superior && requested && compressed && ordinary == 3840));
+        require(!Sp::UseRenderGuides(true, true, true, 3840, 2160, 3840, 2160, { 0, 1080 }));
+        unsigned renderChecks = 0;
+        for (auto render : { DlssNr::GuideExtent { 1920, 1080 }, { 1280, 720 }, { 1919, 1079 }, { 3840, 2160 } })
+            for (bool custom : { false, true })
+            {
+                auto s = settings;
+                if (custom)
+                {
+                    s.offsetX = 2;
+                    s.shiftY = -1;
+                    s.workY = 95;
+                }
+                const auto colour = Sp::Build(s, 3840, 2160, 1.f, false);
+                const auto guide = Sp::RenderGuideLayout(colour, render);
+                for (unsigned axis = 0; axis < 2; ++axis)
+                {
+                    const auto& a = axis ? colour.warp.y : colour.warp.x;
+                    const auto& b = axis ? guide.warp.y : guide.warp.x;
+                    const float ratio = b.workExtent / a.workExtent;
+                    for (float position : { -13.f, .5f, 400.f, 1600.f, 2159.f, 3849.f })
+                        for (float motion : { -100.f, -2.f, 0.f, 17.f, 300.f })
+                        {
+                            require(std::abs(pw::Pack(position, b) - pw::Pack(position, a) * ratio) < .002f);
+                            const float v = pw::Pack(position + motion, b) - pw::Pack(position, b);
+                            const float expected = (pw::Pack(position + motion, a) - pw::Pack(position, a)) * ratio;
+                            require(std::abs(v - expected) < .003f);
+                            require(std::abs(pw::Unpack(pw::Pack(position, b), b) - position) < .02f);
+                            ++renderChecks;
+                        }
+                }
+            }
+        std::cout << "Render-resolution guide geometry PASS: " << renderChecks
+                  << " normalized warp/end-point checks; native-only gating, odd sizes, offset/shift and overscan\n";
         require(Ss::NeedsTemporal(3840, 2160, 3840, 2160, true, native.modelW, native.modelH));
         require(!Ss::NeedsTemporal(3840, 2160, 3840, 2160, false, native.modelW, native.modelH));
         require(!Ss::NeedsTemporal(3840, 2160, 3840, 2160, true, 3840, 2160));

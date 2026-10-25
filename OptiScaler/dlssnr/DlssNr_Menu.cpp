@@ -3464,9 +3464,10 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
                        "guided reconstruction runs only near/in compressed regions; the center keeps NR without "
                        "the guided filter. Disabling DLSS may increase flicker or instability in motion.");
             ImGui::BeginDisabled(!residualDlss);
-            static const char* presets[] = { "A - higher performance", "D", "E",
-                                             "K - slower, more stable NR in motion" };
-            static constexpr unsigned presetValues[] { 1u, 4u, 5u, 11u };
+            static const char* presets[] = {
+                "A - higher performance", "C", "D", "E", "F", "K - slower, more stable NR in motion"
+            };
+            static constexpr unsigned presetValues[] { 1u, 3u, 4u, 5u, 6u, 11u };
             const auto selectedPreset =
                 DlssNr::SuperiorScaling::Preset(config->DlssNrSuperiorScalingPreset.value_or_default());
             int preset = 0;
@@ -3479,7 +3480,7 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
             HelpMarker(
                 "Superior Scaling: a private DLSS in DLAA mode, applied to NR's change at its working "
                 "resolution. Independent of the NR model preset and the game's own DLSS preset. "
-                "A/D/E availability depends on the DLSS runtime; an unsupported preset can fall back to its default.");
+                "Preset availability depends on the DLSS runtime; an unsupported preset can fall back to its default.");
             ImGui::EndDisabled();
 
             static const char* motionMethods[] = { "Point sampled", "Bilinear + motion guard",
@@ -3505,6 +3506,15 @@ static void RenderOutputPage(Config* config, float menuResScale, const NrCommon&
             HelpMarker("Depth-aware mode only. Reconstructs depth on continuous surfaces and selects matching depth/MV "
                        "from the source footprint when reducing resolution. May change thin silhouettes. Disable to "
                        "compare with point-sampled depth. No resampling at native 100% without Compress.");
+            bool renderGuides = config->DlssNrSuperiorRenderGuides.value_or_default();
+            if (ImGui::Checkbox("Render-resolution depth/MV with Compress at 100% (experimental)", &renderGuides))
+                config->DlssNrSuperiorRenderGuides = renderGuides;
+            HelpMarker("Only active at 100% Model resolution with Compress screen edges and Superior Scaling. "
+                       "NR receives depth and motion at the game's render size multiplied by the actual packed/native "
+                       "colour ratio on each axis. The normalized compression geometry and motion units stay matched. "
+                       "Example: 4K colour, 1080p render, Balanced: 1728x976 guides for 3456x1952 colour. "
+                       "Private residual DLSS reconstructs these guides to its colour raster when enabled. "
+                       "Disable to keep the previous colour-resolution guides. Changes reset history.");
             if (ImGui::TreeNode("Guided reconstruction (experimental)"))
             {
                 float range =

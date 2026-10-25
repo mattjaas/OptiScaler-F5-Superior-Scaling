@@ -32,7 +32,9 @@ param(
     [switch]$GpuSurfaceMotionTiming,
     [switch]$GpuMinifiedMotionTiming,
     [switch]$GpuJointDepth,
-    [switch]$GpuJointDepthTiming
+    [switch]$GpuJointDepthTiming,
+    [switch]$GpuRenderGuides,
+    [switch]$GpuRenderGuidesTiming
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -44,6 +46,7 @@ try {
     if ($GpuMotionTiming) { $GpuMotion = $true }
     if ($GpuSurfaceMotionTiming) { $GpuSurfaceMotion = $true }
     if ($GpuJointDepthTiming) { $GpuJointDepth = $true }
+    if ($GpuRenderGuidesTiming) { $GpuRenderGuides = $true }
     if ($GpuMinifiedMotionTiming) {
         if (!$python) { throw '-GpuMinifiedMotionTiming needs Python to save the baseline shaders' }
         & python tools/prepare_minified_motion_baseline.py
@@ -126,6 +129,8 @@ try {
     if ($GpuMinifiedMotionTiming) { $names += 'minified_motion_timing' }
     if ($GpuJointDepth) { $names += @('joint_depth_quality','tunable_guided_quality') }
     if ($GpuJointDepthTiming) { $names += 'joint_depth_timing' }
+    if ($GpuRenderGuides) { $names += 'render_guides_quality' }
+    if ($GpuRenderGuidesTiming) { $names += 'render_guides_timing' }
     if ($GpuCandidates -or $GpuCandidateTiming) {
         $names += @('four_candidates_quality', 'fused_pack_experiment')
         if ($GpuCandidateTiming) { $names += 'four_candidates_timing' }
@@ -234,6 +239,14 @@ try {
     if ($GpuJointDepthTiming) {
         & "$out/joint_depth_timing.exe"
         if ($LASTEXITCODE -ne 0) { throw 'Joint depth/MV timing failed' }
+    }
+    if ($GpuRenderGuides) {
+        & "$out/render_guides_quality.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Render-resolution guides quality failed' }
+    }
+    if ($GpuRenderGuidesTiming) {
+        & "$out/render_guides_timing.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'Render-resolution guides timing failed' }
     }
     $candidate = 'OptiScaler/shaders/dlssnr/superior/precompile'
     if ($GpuQuality) {

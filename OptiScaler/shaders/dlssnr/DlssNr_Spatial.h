@@ -399,6 +399,36 @@ struct alignas(16) Constants {
 static_assert(sizeof(Constants) == 256);
 static_assert(offsetof(Constants, warp) == 16);
 
+// An optional NR guide lattice, independent of the colour lattice. Preserve the
+// exact normalized warp (including offsets, shifts and native-centre rounding):
+// rebuilding a layout at render resolution would round its centre differently.
+inline Layout RenderGuideLayout(const Layout& colour, GuideExtent render)
+{
+    auto result = colour;
+    const auto extent = [](uint32_t source, uint32_t packed, uint32_t native)
+    { return uint32_t(std::max<uint64_t>(1, (uint64_t(source) * packed + native / 2) / native)); };
+    if (!colour.active || !render.width || !render.height || !colour.nativeW || !colour.nativeH)
+        return result;
+    result.modelW = extent(render.width, colour.modelW, colour.nativeW);
+    result.modelH = extent(render.height, colour.modelH, colour.nativeH);
+    const auto rescale = [](pw::Axis& a, uint32_t size)
+    {
+        const float ratio = float(size) / a.workExtent;
+        a.workExtent = float(size);
+        a.workCenter *= ratio;
+        a.scale *= ratio;
+    };
+    rescale(result.warp.x, result.modelW);
+    rescale(result.warp.y, result.modelH);
+    return result;
+}
+inline bool UseRenderGuides(bool superior, bool requested, bool compressed, uint32_t nativeW, uint32_t nativeH,
+                            uint32_t ordinaryW, uint32_t ordinaryH, GuideExtent render)
+{
+    return superior && requested && compressed && nativeW == ordinaryW && nativeH == ordinaryH && render.width &&
+           render.height;
+}
+
 // Modes: 100 packs the encoded colour, 101 packs depth (point-sampled) and motion (by its end points), 102 unpacks the
 // packed model input and the model's answer back to the ordinary grid, and 103 does that and adds what the round trip
 // took from the model input (a third input: the picture the model would be shown without compression), for the Replace

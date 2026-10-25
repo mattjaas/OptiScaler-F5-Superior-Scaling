@@ -1,7 +1,7 @@
 # Experimental joint depth/MV reconstruction and guided controls
 
 This extension is limited to Superior Scaling. Private residual DLSS now accepts SR hints
-**A (1), D (4), E (5) and K (11)**. The existing A and K selections persist unchanged. This is
+**A (1), C (3), D (4), E (5), F (6) and K (11)**. The existing A and K selections persist unchanged. This is
 independent of the NR Main/Small preset, style and frequency-gain tables. The requested hint is
 applied to DLAA and the other quality hints before feature creation; a change recreates the private
 feature and resets NR/residual history. IsHDR, AutoExposure, MVLowRes, unit exposure and carrier
@@ -17,7 +17,7 @@ Only the Superior menu shows the added controls:
 | `SuperiorReconstructDepth` | false | Joint depth/MV reconstruction, active only with Depth-aware motion. Disable for the previous point-depth path. |
 | `SuperiorGuidedRangeSigma` | 0.015 | Final guided residual reconstruction colour tolerance. |
 | `SuperiorGuidedSpatialSigma` | 3.0 | Final radius-one filter spatial falloff. |
-| `SuperiorScalingPreset` | 1 | Private residual DLSS A=1, D=4, E=5, K=11. |
+| `SuperiorScalingPreset` | 1 | Private residual DLSS A=1, C=3, D=4, E=5, F=6, K=11. |
 
 Both sigma controls have individual Reset buttons and support Ctrl+click numeric entry. CPU
 sanitization accepts range sigma 0.00001..1 and spatial sigma 0.0001..64; nonfinite values restore
@@ -173,3 +173,6 @@ The source DLL was built from `974ed30e`; this report adds no rendering-code cha
 [Raw timestamps](validation/superior-joint-depth-timing.csv),
 [medians, variability and per-block deltas](validation/superior-joint-depth-timing.json), and
 [GPU quality output](validation/superior-joint-depth-quality.txt).
+
+The optional native-100% render-resolution compressed guide lattice is described in
+[Superior-render-resolution-guides.md](Superior-render-resolution-guides.md).

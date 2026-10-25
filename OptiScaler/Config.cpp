@@ -498,6 +498,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrSuperiorGuidedRangeSigma.set_from_config(readFloat("DlssNr", "SuperiorGuidedRangeSigma"));
             DlssNrSuperiorGuidedSpatialSigma.set_from_config(readFloat("DlssNr", "SuperiorGuidedSpatialSigma"));
             DlssNrSuperiorReconstructDepth.set_from_config(readBool("DlssNr", "SuperiorReconstructDepth"));
+            DlssNrSuperiorRenderGuides.set_from_config(readBool("DlssNr", "SuperiorRenderGuides"));
             DlssNrSuperiorResidualDlss.set_from_config(readBool("DlssNr", "SuperiorResidualDlss"));
             DlssNrSuperiorSkipMvUnits.set_from_config(readBool("DlssNr", "SuperiorSkipMvUnits"));
             DlssNrSuperiorSkipInterPass.set_from_config(readBool("DlssNr", "SuperiorSkipInterPass"));
@@ -1664,6 +1665,8 @@ bool Config::SaveIni()
                  GetFloatValue(Instance()->DlssNrSuperiorGuidedSpatialSigma.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorReconstructDepth",
                  GetBoolValue(Instance()->DlssNrSuperiorReconstructDepth.value_for_config()).c_str());
+    ini.SetValue("DlssNr", "SuperiorRenderGuides",
+                 GetBoolValue(Instance()->DlssNrSuperiorRenderGuides.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorResidualDlss",
                  GetBoolValue(Instance()->DlssNrSuperiorResidualDlss.value_for_config()).c_str());
     ini.SetValue("DlssNr", "SuperiorSkipMvUnits",

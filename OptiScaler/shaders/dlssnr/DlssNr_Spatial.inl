@@ -40,7 +40,7 @@ ID3D12Resource* proxyNative = nullptr;  // supersampling only: both averaged dow
 ID3D12Resource* answerNative = nullptr;
 OS_Dx12* proxyDown = nullptr; // the down-leg for the proxy; the answer goes through g_nr.superDown, the same filter
 Scaler proxyDownScaler = Scaler::Count; // the filter proxyDown was built with: it must be the answer's, or halos
-unsigned int madeFor[6] = {}; // packed w/h, ordinary w/h, native w/h the textures above were made for
+unsigned int madeFor[8] = {};           // colour/ordinary/native/guide sizes the textures above were made for
 bool madeSuper = false, madeUnpack = true;
 
 std::mutex publishedLock;
@@ -138,9 +138,12 @@ bool PrepareUnpack(ID3D12Device* device, const Sp::Layout& l)
 }
 
 // The textures for this layout, made again when the sizes change. False if one could not be made.
-bool Prepare(ID3D12Device* device, const Sp::Layout& l, bool supersample, bool unpack)
+bool Prepare(ID3D12Device* device, const Sp::Layout& l, bool supersample, bool unpack, DlssNr::GuideExtent guides = {})
 {
-    const unsigned int want[6] = { l.modelW, l.modelH, l.ordinaryW, l.ordinaryH, l.nativeW, l.nativeH };
+    if (!guides.width || !guides.height)
+        guides = { l.modelW, l.modelH };
+    const unsigned int want[8] = { l.modelW,  l.modelH,  l.ordinaryW,  l.ordinaryH,
+                                   l.nativeW, l.nativeH, guides.width, guides.height };
 
     // Unpack textures already there satisfy a frame that does not need them (e.g. after exposure calibration ends),
     // and a frame that newly needs them only adds them: neither re-makes the packed colour/depth/motion.
@@ -151,8 +154,8 @@ bool Prepare(ID3D12Device* device, const Sp::Layout& l, bool supersample, bool u
     Release();
 
     bool ok = Make(color, device, kFormat, l.modelW, l.modelH) &&
-              Make(depth, device, DXGI_FORMAT_R32_FLOAT, l.modelW, l.modelH) &&
-              Make(motion, device, DXGI_FORMAT_R32G32_FLOAT, l.modelW, l.modelH);
+              Make(depth, device, DXGI_FORMAT_R32_FLOAT, guides.width, guides.height) &&
+              Make(motion, device, DXGI_FORMAT_R32G32_FLOAT, guides.width, guides.height);
 
     if (ok && unpack)
         ok = PrepareUnpack(device, l);
@@ -170,6 +173,9 @@ bool Prepare(ID3D12Device* device, const Sp::Layout& l, bool supersample, bool u
     std::copy(std::begin(want), std::end(want), std::begin(madeFor));
     madeSuper = supersample;
     madeUnpack = unpack;
+    if (guides.width != l.modelW || guides.height != l.modelH)
+        LOG_INFO("Superior Scaling: render-resolution packed depth/MV {}x{} for NR colour {}x{} (native {}x{})",
+                 guides.width, guides.height, l.modelW, l.modelH, l.nativeW, l.nativeH);
     return true;
 }
 

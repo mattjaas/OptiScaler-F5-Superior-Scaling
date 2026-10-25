@@ -161,7 +161,7 @@ int main() {
         require(MotionScale(1920, 2496, 0, 1920) == 2496);
         require(MotionScale(1,1274,0)==1); // unspecified game reference
         for (unsigned i = 0; i < 30; ++i)
-            require(Preset(i) == (i == 4u || i == 5u || i == 11u ? i : 1u));
+            require(Preset(i) == (i == 3u || i == 4u || i == 5u || i == 6u || i == 11u ? i : 1u));
         require(Preset(UINT32_MAX)==1u);
         require(!CustomGuided(.015f, 3.f) && CustomGuided(.02f, 3.f) && CustomGuided(.015f, 2.f));
         require(GuidedRange(NAN) == .015f && GuidedSpatial(INFINITY) == 3.f);
@@ -280,6 +280,6 @@ int main() {
             require(!Enabled(cfg));
         }
         std::cout << "Superior policy PASS: Main/Small/Default/legacy presets on 310.8 and 310.9, mixed gain blocks "
-                     "and schedules, fixed settings, A/D/E/K, tunable guided, guides and PSO guards\n";
+                     "and schedules, fixed settings, A/C/D/E/F/K, tunable guided, guides and PSO guards\n";
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }
