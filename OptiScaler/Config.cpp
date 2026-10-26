@@ -1005,6 +1005,9 @@ void Config::ReadDlssNr()
     DlssNrEnabled.set_from_config(readBool("DlssNr", "Enabled"));
     DlssNrRunBeforeSr.set_from_config(readBool("DlssNr", "RunBeforeSR"));
     DlssNrFinishedPicture.set_from_config(readBool("DlssNr", "FinishedPicture"));
+    DlssNrFinishedGameFgMode.set_from_config(readUInt("DlssNr", "FinishedGameFgMode"));
+    if (DlssNrFinishedGameFgMode.value_or_default() > 1)
+        DlssNrFinishedGameFgMode = 0u;
     DlssNrDeferredDlss.set_from_config(readBool("DlssNr", "DeferredDLSS"));
     // ResidualFG and ResidualFGApproxCamera are no longer read: NR every second frame through NVIDIA Frame
     // Generation is off for good, whatever an old ini says.
@@ -1298,6 +1301,7 @@ static void WriteDlssNr(Config& c, CSimpleIniA& out)
     // --- DLSS 5 Neural Rendering (OptiScaler/dlssnr) ---
     out.SetValue("DlssNr", "Enabled", GetBoolValue(c.DlssNrEnabled.value_for_config()).c_str());
     out.SetValue("DlssNr", "FinishedPicture", GetBoolValue(c.DlssNrFinishedPicture.value_for_config()).c_str());
+    out.SetValue("DlssNr", "FinishedGameFgMode", GetIntValue(c.DlssNrFinishedGameFgMode.value_for_config()).c_str());
     out.SetValue("DlssNr", "RunBeforeSR",
                  GetBoolValue(c.DlssNrRunBeforeSr.value_for_config()).c_str());
     out.SetValue("DlssNr", "DeferredDLSS",
@@ -1690,6 +1694,7 @@ size_t Config::ApplyDlssNrSection(const DlssNrProfiles::Section& section)
         NR_PROFILE_FIELD("RunBeforeSR", DlssNrRunBeforeSr),
         NR_PROFILE_FIELD("DeferredDLSS", DlssNrDeferredDlss),
         NR_PROFILE_FIELD("FinishedPicture", DlssNrFinishedPicture),
+        NR_PROFILE_FIELD("FinishedGameFgMode", DlssNrFinishedGameFgMode),
         NR_PROFILE_FIELD("Precision", DlssNrPrecision),
         NR_PROFILE_FIELD("Preset", DlssNrPreset),
         NR_PROFILE_FIELD("WorkingScale", DlssNrWorkingScale),

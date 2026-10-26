@@ -6,6 +6,7 @@
 #include <Util.h>
 #include <intrin.h>
 #include <Config.h>
+#include <dlssnr/DlssNr_StreamlinePicture.h>
 
 #include <nvapi/fakenvapi.h>
 #include <misc/IdentifyGpu.h>
@@ -1703,6 +1704,9 @@ void* StreamlineHooks::hkdlssg_slGetPluginFunction(const char* functionName)
     if (!o_slDLSSGGetState)
         o_slDLSSGGetState = (decltype(&slDLSSGGetState)) LoadOriginal(o_dlssg_slGetPluginFunction)("slDLSSGGetState");
 
+    if (auto* wrapped = DlssNr::StreamlinePicture::Wrap(functionName, LoadOriginal(o_dlssg_slGetPluginFunction)))
+        return wrapped;
+
     return LoadOriginal(o_dlssg_slGetPluginFunction)(functionName);
 }
 
@@ -1715,6 +1719,10 @@ void* StreamlineHooks::hklocal_dlssg_slGetPluginFunction(const char* functionNam
         o_local_dlssg_slOnPluginLoad = (PFN_slOnPluginLoad) LoadOriginal(o_local_dlssg_slGetPluginFunction)(functionName);
         return &hklocal_dlssg_slOnPluginLoad;
     }
+
+    if (auto* wrapped =
+            DlssNr::StreamlinePicture::Wrap(functionName, LoadOriginal(o_local_dlssg_slGetPluginFunction), true))
+        return wrapped;
 
     return LoadOriginal(o_local_dlssg_slGetPluginFunction)(functionName);
 }

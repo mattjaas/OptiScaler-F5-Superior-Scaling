@@ -45,6 +45,26 @@ inline FinishedPick PickFinishedInput(const FinishedInput* inputs, size_t count,
                                                                                        : FinishedPick::NotReady;
 }
 
+// Experimental wilsjo2 handoff: choose the newest already ordered/completed capture. Native FG
+// inflates presentation epochs, so that route deliberately uses capture serials instead. Keep the
+// janblade policy above separate for the unchanged A/B path.
+inline FinishedPick PickReadyFinishedInput(const FinishedInput* inputs, size_t count, size_t& index)
+{
+    const FinishedInput* newest = nullptr;
+    bool eligible = false;
+    for (size_t i = 0; i < count; ++i)
+    {
+        eligible |= inputs[i].eligible;
+        if (inputs[i].eligible && FinishedInputReady(inputs[i].sameQueue, inputs[i].completed, inputs[i].required) &&
+            (!newest || inputs[i].serial > newest->serial))
+        {
+            newest = &inputs[i];
+            index = i;
+        }
+    }
+    return newest ? FinishedPick::Ready : eligible ? FinishedPick::NotReady : FinishedPick::None;
+}
+
 // Presents from `then` to `now`; UINT64_MAX when `then` never happened (UINT64_MAX). A `then` ahead of `now`
 // (the two are read without a common lock) counts as just now, so a race errs towards pausing.
 inline uint64_t PresentsSince(uint64_t now, uint64_t then)

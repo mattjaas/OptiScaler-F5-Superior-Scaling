@@ -274,6 +274,8 @@ class Config
     // post-SR placement regardless of this setting.
     CustomOptional<bool> DlssNrRunBeforeSr { false };
     CustomOptional<bool> DlssNrFinishedPicture { false };
+    // Experimental native-FG A/B: unchanged janblade present path vs wilsjo2 app-frame handoff.
+    CustomOptional<uint32_t> DlssNrFinishedGameFgMode { 0 };
     // Generate NR before SR, upscale its signed contribution with a private DLSS feature,
     // and apply it after the game's upscaler. Takes precedence over RunBeforeSR; opt-in.
     CustomOptional<bool> DlssNrDeferredDlss { false };

@@ -2038,6 +2038,7 @@
     <None Include="shaders\magnifier\precompile\Magnifier_Shader_Vk.spv" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="dlssnr\DlssNr_StreamlinePicture.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="dlssnr\DlssNr_GpuLifetime.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="dlssnr\DlssNr_GuidedShaping.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="dlssnr\DlssNr_InterPassPolicy.h"><Filter>Header Files</Filter></ClInclude>
@@ -2048,6 +2049,7 @@
     <ClInclude Include="shaders\dlssnr\superior\Fields.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="shaders\dlssnr\superior\Pipeline.inl"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="shaders\dlssnr\superior\Shader.inl"><Filter>Header Files</Filter></ClInclude>
+    <ClCompile Include="dlssnr\DlssNr_StreamlinePicture.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="dlssnr\DlssNr_GpuLifetime.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>

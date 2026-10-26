@@ -3098,6 +3098,22 @@ static void RenderOptionsPage(Config* config, float menuResScale, const NrCommon
                    "(DirectX 12).\n"
                    "With Ray Reconstruction, NR always runs after.");
 
+        if (finishedPicture)
+        {
+            const char* routes[] = { "Janblade - unblocked", "Wilsjo2 - before FG" };
+            int route = config->DlssNrFinishedGameFgMode.value_or_default() == 1 ? 1 : 0;
+            if (ImGui::Combo("Native FG integration", &route, routes, IM_ARRAYSIZE(routes)))
+            {
+                config->DlssNrFinishedGameFgMode = static_cast<uint32_t>(route);
+                RetryNr();
+            }
+            HelpMarker("Experimental comparison for the game's own frame generation.\n"
+                       "Janblade - unblocked: keeps janblade's presentation path, without the native-FG pause.\n"
+                       "Wilsjo2 - before FG: applies NR to Streamline's real application frame on the render queue, "
+                       "before interpolation. Requires the game's Streamline application-buffer hooks.\n"
+                       "Switching resets NR history; no restart is required when the hooks are available.");
+        }
+
         if (finishedPicture && enabled)
         {
             const auto feature = State::Instance().currentFeature;

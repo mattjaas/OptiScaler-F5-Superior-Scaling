@@ -46,6 +46,7 @@
 #include "DlssNr_ExposureFoundBlend.h"
 #include "DlssNr_ExposureMeter.h"
 #include "DlssNr_FinishedReady.h"
+#include <dlssnr/DlssNr_StreamlinePicture.h>
 #include <dlssnr/DlssNr_GameDefaults.h>
 
 #include <Config.h>
@@ -6091,6 +6092,7 @@ void EvaluateInternal(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* p
         lastPrecision = precision;
     }
     DlssNrNative::SetPrecision(precision);
+    Late::CheckRoute();
     const unsigned finishedMode = !cfg.DlssNrFinishedPicture.value_or_default() ? 0u :
         (cfg.DlssNrRunBeforeSr.value_or_default() || cfg.DlssNrDeferredDlss.value_or_default()) ? 2u : 1u;
     static unsigned lastFinishedMode = 0;

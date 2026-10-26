@@ -67,7 +67,8 @@ enum class GameQuirk : uint64_t
     CreateSLOnThe2ndDevice,
     Kcd2DlssgHdr10,
     REFrameworkCompat, // misc/REFrameworkCompat.h, resolved with [Hotfix] REFrameworkCompat
-    // Don't forget to add the new entry to printQuirks
+    Kcd2NrBeforeFg,    // wilsjo2 local Streamline handoff; runtime-gated by FinishedGameFgMode
+                    // Don't forget to add the new entry to printQuirks
     _
 };
 
@@ -94,7 +95,7 @@ struct QuirkEntry
 static const QuirkEntry quirkTable[] = {
 
     // Native DLSSG requires HDR10; the game's HDR toggle otherwise restores scRGB.
-    QUIRK_ENTRY("kingdomcome.exe", GameQuirk::Kcd2DlssgHdr10),
+    QUIRK_ENTRY("kingdomcome.exe", GameQuirk::Kcd2DlssgHdr10, GameQuirk::Kcd2NrBeforeFg),
 
     // Red Dead Redemption 2
     // Spoofing causes FSR2 inputs crash, DLSS inputs need OptiPatcher to avoid artifacts/crashes anyway
@@ -211,7 +212,8 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("onimushawots.exe", GameQuirk::RestoreComputeSigOnNonNvidia, GameQuirk::DisableDxgiSpoofing,
                 GameQuirk::RestoreComputeSigOnNvidia),
 
-    // Capcom RE Engine games: [Hotfix] REFrameworkCompat=auto turns misc/REFrameworkCompat.h on in these when dinput8.dll
+    // Capcom RE Engine games: [Hotfix] REFrameworkCompat=auto turns misc/REFrameworkCompat.h on in these when
+    // dinput8.dll
     // is the REFramework fork that draws on XeFG (onehoon). Entries add up with the ones above and below.
     QUIRK_ENTRY("re2.exe", GameQuirk::REFrameworkCompat),
     QUIRK_ENTRY("re3.exe", GameQuirk::REFrameworkCompat),

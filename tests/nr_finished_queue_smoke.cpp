@@ -63,6 +63,10 @@ int main() try
     FinishedInput stale[3] { { true, 5, false, 5, 5 }, { true, 6, false, 5, 6 }, { false, 7, true, 0, 7 } };
     Expect(DlssNr::PickFinishedInput(stale, 3, index) == FinishedPick::NotReady && index == 1,
            "Fell back to the previous frame's finished guides");
+    Expect(DlssNr::PickReadyFinishedInput(stale, 3, index) == FinishedPick::Ready && index == 0,
+           "Wilsjo2 did not select the newest ready capture");
+    Expect(DlssNr::PickReadyFinishedInput(none, 2, index) == FinishedPick::None,
+           "Wilsjo2 selected an ineligible capture");
     FinishedInput sameQueue[2] { { true, 5, true, 0, 5 }, { true, 6, true, 0, 6 } };
     Expect(DlssNr::PickFinishedInput(sameQueue, 2, index) == FinishedPick::Ready && index == 1,
            "Rejected the newest same-queue slot");
@@ -71,6 +75,11 @@ int main() try
            "Rejected the newest completed cross-queue slot");
     FinishedInput removed[1] { { true, 6, true, UINT64_MAX, 6 } };
     Expect(DlssNr::PickFinishedInput(removed, 1, index) == FinishedPick::NotReady, "Composed after device removal");
+
+    Expect(DlssNr::PickReadyFinishedInput(removed, 1, index) == FinishedPick::NotReady,
+           "Wilsjo2 composed after device removal");
+    Expect(DlssNr::PickReadyFinishedInput(sameQueue, 2, index) == FinishedPick::Ready && index == 1,
+           "Wilsjo2 rejected same-queue order");
 
     // Finished picture pauses only for the game's own DLSS-G, and only while it is running.
     const uint64_t never = UINT64_MAX;
