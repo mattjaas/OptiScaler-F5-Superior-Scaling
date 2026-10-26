@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <stdexcept>
 #include "../../OptiScaler/dlssnr/DlssNr_StreamlinePicture.h"
+#include "../../OptiScaler/framegen/dlssg/DlssgTelemetry.h"
+#include "../../OptiScaler/shaders/dlssnr/DlssNr_FinishedReady.h"
 using Microsoft::WRL::ComPtr;
 static void Check(HRESULT hr)
 {
@@ -54,8 +56,18 @@ struct Quirks
     bool enabled = false;
     bool operator[](GameQuirk) const { return enabled; }
 };
+namespace sl
+{
+enum class DLSSGMode
+{
+    eOff,
+    eOn
+};
+}
 struct State
 {
+    uint64_t frameCount = 100, dlssgLastEvaluateFrame = UINT64_MAX;
+    sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
     bool isShuttingDown = false;
     Quirks gameQuirks;
     FGNvngxReplacement activeFgNvngx = FGNvngxReplacement::None;
@@ -72,7 +84,7 @@ bool CheckForRealObject(const char*, IUnknown*, IUnknown**) { return false; }
 #define LOG_INFO(...) ((void) 0)
 static ID3D12Resource* expectedPicture;
 static ID3D12CommandQueue* expectedQueue;
-static unsigned edits = 0;
+static unsigned edits = 0, passthroughEdits = 0;
 static bool expectPq = false;
 // DlssNrFeature_Dx12.h's private-data key; avoid pulling NGX/application headers into the harness.
 static constexpr GUID colorSpaceKey = {
@@ -94,6 +106,12 @@ void ApplyToStreamlinePicture(IDXGISwapChain* swapchain, ID3D12Resource* picture
     }
     ++edits;
 }
+void ApplyToStreamlinePassthrough(IDXGISwapChain*, ID3D12CommandQueue* queue)
+{
+    Expect(queue == expectedQueue, "Passthrough used the asynchronous presentation queue");
+    ++edits;
+    ++passthroughEdits;
+}
 } // namespace DlssNr
 // The runner copies the production body unchanged, replacing only application includes with these seams.
 #include "StreamlinePicture.cpp"
@@ -103,7 +121,7 @@ template <unsigned Runtime> struct Plugin
     inline static ComPtr<IDXGISwapChain1> chain;
     inline static ComPtr<ID3D12Resource> picture;
     inline static unsigned calls = 0, expectedEdits = 0;
-    inline static bool handled = true;
+    inline static bool handled = true, bufferHandled = true;
     static UINT Index(IDXGISwapChain*, bool& skip)
     {
         skip = handled;
@@ -112,7 +130,7 @@ template <unsigned Runtime> struct Plugin
     static HRESULT Buffer(IDXGISwapChain*, UINT index, REFIID iid, void** output, bool& skip)
     {
         Expect(index == Runtime, "Called another plugin's index hook");
-        skip = handled;
+        skip = handled && bufferHandled;
         return picture->QueryInterface(iid, output);
     }
     static HRESULT Present(IDXGISwapChain*, UINT, UINT, bool&)
@@ -212,6 +230,8 @@ try
     Check(nativePresent(nativeChain.Get(), 0, 0, skip));
     Expect(edits == 0, "Janblade A/B mode unexpectedly used the pre-FG handoff");
     Config::Instance()->DlssNrFinishedGameFgMode.value = 1;
+    State::Instance().dlssgLastSetMode = sl::DLSSGMode::eOn;
+    State::Instance().dlssgLastEvaluateFrame = State::Instance().frameCount;
     for (unsigned frame = 0; frame < 6; ++frame)
     {
         expectPq = false;
@@ -251,6 +271,92 @@ try
     skip = false;
     Check(nativePresent(nativeChain.Get(), 0, 0, skip));
     Expect(Plugin<0>::calls == 8 && Plugin<1>::calls == 12, "Lost or duplicated an original present");
+    // A registered chain must recover when FG stops and the plugin declines its app buffers.
+    // The successful Off setting takes precedence over a recent evaluate from the last FG frame.
+    Config::Instance()->DlssNrFinishedGameFgMode.value = 1;
+    State::Instance().dlssgLastSetMode = sl::DLSSGMode::eOff;
+    DlssgTelemetry::RecordSetOptions(1, 1, false, 0);
+    Plugin<0>::handled = false;
+    Plugin<0>::expectedEdits = edits + 1;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Expect(passthroughEdits == 1, "FG Off left NR blocked by stale registration");
+    Expect(RenderQueue(nativeChain.Get()).Get() == queue.Get(), "FG Off discarded render-queue registration");
+    // Start without any FG options/evaluates, as some games load the plugin but leave FG unused.
+    DlssgTelemetry::g_counts.optionsSeen.store(false);
+    State::Instance().dlssgLastEvaluateFrame = UINT64_MAX;
+    Plugin<0>::expectedEdits = edits + 1;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Expect(passthroughEdits == 2, "NR did not run when FG had never been enabled");
+    // Off/On cycles, native and local runtimes. A missing buffer while FG is On must not touch a
+    // generated display buffer. Successful app handoff must never also invoke passthrough.
+    for (unsigned cycle = 0; cycle < 3; ++cycle)
+    {
+        State::Instance().dlssgLastSetMode = sl::DLSSGMode::eOn;
+        DlssgTelemetry::RecordSetOptions(1, 1, true, 0);
+        Plugin<0>::expectedEdits = edits;
+        Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+        Plugin<0>::handled = true;
+        expectPq = false;
+        expectedPicture = Plugin<0>::picture.Get();
+        Plugin<0>::expectedEdits = edits + 1;
+        Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+        Expect(passthroughEdits == 2 + cycle, "App handoff or running FG also invoked passthrough");
+        State::Instance().dlssgLastSetMode = sl::DLSSGMode::eOff;
+        DlssgTelemetry::RecordSetOptions(1, 1, false, 0);
+        Plugin<1>::handled = false;
+        Plugin<1>::expectedEdits = edits + 1;
+        Check(localPresent(localChain.Get(), 0, 0, nullptr, skip));
+        Expect(passthroughEdits == 3 + cycle, "Local FG Off did not recover NR");
+        Plugin<1>::handled = true;
+        expectPq = true;
+        expectedPicture = Plugin<1>::picture.Get();
+        Plugin<1>::expectedEdits = edits + 1;
+        Check(localPresent(localChain.Get(), 0, 0, nullptr, skip));
+        Expect(passthroughEdits == 3 + cycle, "FG Off with a valid app buffer ran NR twice");
+        Plugin<0>::handled = false;
+    }
+    // Do not infer Off from a failed options call or a still-recent evaluate without options.
+    DlssgTelemetry::RecordSetOptions(1, 1, false, 1);
+    Plugin<0>::expectedEdits = edits;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    DlssgTelemetry::g_counts.optionsSeen.store(false);
+    State::Instance().dlssgLastEvaluateFrame = State::Instance().frameCount;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    DlssgTelemetry::RecordSetOptions(1, 1, false, 0);
+    State::Instance().dlssgLastSetMode = sl::DLSSGMode::eOn;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    State::Instance().dlssgLastSetMode = sl::DLSSGMode::eOff;
+    // Some plugins handle the index but decline GetBuffer after FG is disabled.
+    Plugin<0>::handled = true;
+    Plugin<0>::bufferHandled = false;
+    Plugin<0>::expectedEdits = edits + 1;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Expect(passthroughEdits == 6, "Declined GetBuffer did not recover NR");
+    // A missing queue must leave the ordinary lower route alone, never compose before Present.
+    Check(nativeChain->SetPrivateDataInterface(renderQueueKey, nullptr));
+    Plugin<0>::expectedEdits = edits;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Expect(passthroughEdits == 6, "Passthrough ran without a registered render queue");
+    Check(nativeChain->SetPrivateDataInterface(renderQueueKey, queue.Get()));
+    Plugin<0>::handled = false;
+    // Test/skip/disabled/shutdown guards apply to passthrough too.
+    Check(nativePresent(nativeChain.Get(), 0, DXGI_PRESENT_TEST, skip));
+    skip = true;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    skip = false;
+    Config::Instance()->DlssNrEnabled.value = false;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Config::Instance()->DlssNrEnabled.value = true;
+    Config::Instance()->DlssNrFinishedPicture.value = false;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Config::Instance()->DlssNrFinishedPicture.value = true;
+    State::Instance().isShuttingDown = true;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    State::Instance().isShuttingDown = false;
+    Config::Instance()->DlssNrFinishedGameFgMode.value = 0;
+    Check(nativePresent(nativeChain.Get(), 0, 0, skip));
+    Expect(passthroughEdits == 6, "A passthrough guard allowed an extra edit");
+    puts("PASS: FG Off recovery, no-FG startup, repeated Off/On, native/local separation, no duplicate edits");
     puts("PASS: KCD2-only real FG gate; local legacy + native Hwnd registration; separate plugin buffers; "
          "PQ/10-bit metadata; edit before FG; live A/B selection; skip/disabled/shutdown guards");
     return 0;

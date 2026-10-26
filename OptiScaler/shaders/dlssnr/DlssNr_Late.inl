@@ -689,6 +689,28 @@ void ApplyToStreamlinePicture(IDXGISwapChain* swapchain, ID3D12Resource* picture
         ApplyFinishedColor(picture, queue, space, true);
 }
 
+void ApplyToStreamlinePassthrough(IDXGISwapChain* swapchain, ID3D12CommandQueue* queue)
+{
+    if (State::Instance().isShuttingDown || !swapchain || !queue ||
+        Config::Instance()->DlssNrFinishedGameFgMode.value_or_default() != 1 ||
+        !Config::Instance()->DlssNrFinishedPicture.value_or_default() ||
+        !Config::Instance()->DlssNrEnabled.value_or_default() ||
+        State::Instance().swapchainInteropApi != SwapchainInteropApi::None)
+        return;
+    // Called only by the real app-facing Present wrapper with FG off, never from the lower
+    // presentation hooks. Keep the registration: generated presents on other threads must still
+    // be excluded when FG restarts. All swapchain calls precede g_nrMutex, as in the handoff path.
+    Late::ComPtr<IDXGISwapChain3> sc;
+    Late::ComPtr<ID3D12Resource> color;
+    if (FAILED(swapchain->QueryInterface(IID_PPV_ARGS(&sc))) ||
+        FAILED(SdrToHdr::GameBuffer(sc.Get(), sc->GetCurrentBackBufferIndex(), IID_PPV_ARGS(&color))))
+        return;
+    const auto space = NativeInputColourSpace(swapchain, color->GetDesc().Format);
+    std::lock_guard<std::recursive_mutex> lock(g_nrMutex);
+    if (Config::Instance()->DlssNrFinishedGameFgMode.value_or_default() == 1)
+        ApplyFinishedColor(color.Get(), queue, space, false);
+}
+
 // The body of ApplyNativeInput and ApplyVirtualUpscalerInput. `fromVirtualUpscaler` skips the Finished Picture setting,
 // which is about NR Only mode, not the picture (NR + frame generation keeps it off, for the game's own upscaler
 // calls). Neither refuses while frame generation has replaced a D3D11 or Vulkan game's swap chain: both then run from that

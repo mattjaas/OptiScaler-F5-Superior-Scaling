@@ -6,6 +6,8 @@
 #include <Util.h>
 #include <cstring>
 #include <atomic>
+#include <framegen/dlssg/DlssgTelemetry.h>
+#include <shaders/dlssnr/DlssNr_FinishedReady.h>
 
 namespace DlssNr::StreamlinePicture
 {
@@ -35,6 +37,23 @@ void RegisterQueue(HRESULT result, bool handled, IUnknown* device, IDXGISwapChai
     }
 }
 
+// A successful Off call is authoritative even while the previous FG evaluate is still recent.
+// Without an options call, retain the existing conservative recent-evaluate check. A failed call
+// does not prove that FG stopped, so do not fall back onto its asynchronous display buffers.
+bool GameFgMayBeRunning()
+{
+    const auto& state = State::Instance();
+    // SetOptions records this before entering the runtime; an On transition in progress must
+    // not use a previous successful Off result to enable the ordinary-picture fallback.
+    if (state.dlssgLastSetMode != sl::DLSSGMode::eOff)
+        return true;
+    const auto& counts = DlssgTelemetry::Get();
+    if (counts.optionsSeen.load(std::memory_order_acquire))
+        return counts.result.load(std::memory_order_relaxed) != 0 || counts.active.load(std::memory_order_relaxed);
+    return GameFrameGenerationOn(false, false, false, state.dlssgLastSetMode != sl::DLSSGMode::eOff,
+                                 PresentsSince(state.frameCount, state.dlssgLastEvaluateFrame));
+}
+
 // The game's and OptiScaler's plugins can coexist. Never call one runtime's hooks on the other's buffers.
 template <bool Local> struct Hooks
 {
@@ -57,9 +76,10 @@ template <bool Local> struct Hooks
         if (!queue)
             return;
         auto picture = Read(swapchain, getIndex.load(), getBuffer.load());
-        if (!picture)
-            return;
-        ApplyToStreamlinePicture(swapchain, picture.Get(), queue.Get());
+        if (picture)
+            ApplyToStreamlinePicture(swapchain, picture.Get(), queue.Get());
+        else if (!GameFgMayBeRunning())
+            ApplyToStreamlinePassthrough(swapchain, queue.Get());
     }
 
     static HRESULT BeforePresent(IDXGISwapChain* swapchain, UINT interval, UINT flags, bool& skip)
