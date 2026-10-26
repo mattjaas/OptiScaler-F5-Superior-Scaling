@@ -97,16 +97,13 @@ ID3D12CommandQueue* RealQueue(ID3D12CommandQueue* queue)
     return Util::CheckForRealObject(__FUNCTION__, queue, (IUnknown**) &real) ? real : queue;
 }
 
-// Both callers already split on OptiScaler's FG (the swapchain Present when it is off, FG_Hooks when it
-// runs); the check is repeated so capture, which has no such caller, decides the same way.
+// Experimental branch-only override: allow Finished Picture with the game's own FG.
+// Keep the same decision for capture, deferred processing and composition. This
+// does not identify generated frames or move NR before the game's interpolation;
+// the queue-readiness, newest-slot and resource-lifetime safeguards still apply.
 bool PausedForGameFrameGeneration()
 {
-    auto& state = State::Instance();
-    auto* fg = state.currentFG;
-    return GameFrameGenerationOn(fg && fg->IsActive() && !fg->IsPaused(),
-                                 state.activeFgInput == FGInput::DLSSG, state.activeFgOutput == FGOutput::DLSSG,
-                                 state.dlssgLastSetMode != sl::DLSSGMode::eOff,
-                                 PresentsSince(state.frameCount, state.dlssgLastEvaluateFrame));
+    return false;
 }
 
 void Cancel()
